@@ -1,29 +1,83 @@
 import { useEffect, useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-} from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-import CityMap from "../components/CityMap";
 import CameraBottomSheet from "../components/CameraBottomSheet";
+import CityMap from "../components/CityMap";
 
-import { Camera } from "../../domain/models/Camera";
+import { MockVehicleRepository } from "@/src/data/repositories/MockVehicleRepository";
+import { Vehicle } from "@/src/domain/models/Vehicle";
+import { VehicleTrajectory } from "@/src/domain/models/VehicleTrajectory";
+import { GetVehicleTrajectory } from "@/src/domain/usecases/GetVehicleTrajectory";
+import { SearchVehicle } from "@/src/domain/usecases/searchVehicle";
 import { MockCameraRepository } from "../../data/repositories/MockCameraRepository";
+import { MockVehicleTrajectoryRepository } from "../../data/repositories/MockVehicleTrajectoryRepository";
+import { Camera } from "../../domain/models/Camera";
 import { GetCameras } from "../../domain/usecases/GetCameras";
+import VehicleResultCard from "../components/VehicleResultcard";
+import VehicleSearch from "../components/VehicleSearch";
 
 export default function DashboardScreen() {
   // Camera data
   const [cameras, setCameras] = useState<Camera[]>([]);
 
   // Selected camera
-  const [selectedCamera, setSelectedCamera] =
-    useState<Camera | null>(null);
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   // Camera popup visibility
-  const [cameraVisible, setCameraVisible] =
-    useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
+
+  const [searchText, setSearchText] = useState("");
+
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+
+  const [vehicleLoading, setVehicleLoading] = useState(false);
+
+  const [vehicleError, setVehicleError] = useState("");
+  const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
+
+  //search function
+
+  const handleVehicleSearch = async () => {
+    if (!searchText.trim()) {
+      setVehicleError("Enter a vehicle number");
+      return;
+    }
+
+    setVehicleLoading(true);
+    setVehicleError("");
+    setVehicle(null);
+
+    try {
+      const repository = new MockVehicleRepository();
+
+      const searchVehicle = new SearchVehicle(repository);
+
+      const result = await searchVehicle.execute(searchText);
+
+      if (result) {
+        setVehicle(result);
+
+        const trajectoryRepository = new MockVehicleTrajectoryRepository();
+
+        const getVehicleTrajectory = new GetVehicleTrajectory(
+          trajectoryRepository,
+        );
+
+        const trajectoryResult = await getVehicleTrajectory.execute(searchText);
+
+        setTrajectory(trajectoryResult);
+      } else {
+        setVehicle(null);
+        setTrajectory(null);
+        setVehicleError("Vehicle not found");
+      }
+    } catch (error) {
+      console.error(error);
+      setVehicleError("Something went wrong");
+    } finally {
+      setVehicleLoading(false);
+    }
+  };
 
   // Load cameras
   useEffect(() => {
@@ -58,17 +112,12 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.logo}>
-            TraffixAI
-          </Text>
+          <Text style={styles.logo}>TraffixAI</Text>
 
-          <Text style={styles.subtitle}>
-            City Traffic Intelligence
-          </Text>
+          <Text style={styles.subtitle}>City Traffic Intelligence</Text>
         </View>
 
         <View style={styles.profile}>
@@ -77,53 +126,53 @@ export default function DashboardScreen() {
       </View>
 
       {/* Vehicle Search */}
-      <TextInput
-        style={styles.search}
-        placeholder="Search vehicle number..."
-        placeholderTextColor="#888"
+      <VehicleSearch
+        value={searchText}
+        onChangeText={setSearchText}
+        onSearch={handleVehicleSearch}
+        loading={vehicleLoading}
       />
+
+      {vehicleError ? <Text style={styles.error}>{vehicleError}</Text> : null}
+
+      {vehicle ? (
+        <VehicleResultCard
+          vehicle={vehicle}
+          onPress={() => {
+            console.log("Vehicle selected:", vehicle);
+          }}
+        />
+      ) : null}
 
       {/* City Map */}
       <View style={styles.mapContainer}>
         <CityMap
           cameras={cameras}
+          vehicle={vehicle}
+          trajectory={trajectory}
           onCameraPress={handleCameraPress}
         />
       </View>
 
       {/* Statistics */}
       <View style={styles.stats}>
-
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            {cameras.length}
-          </Text>
+          <Text style={styles.statValue}>{cameras.length}</Text>
 
-          <Text style={styles.statLabel}>
-            Cameras
-          </Text>
+          <Text style={styles.statLabel}>Cameras</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            1240
-          </Text>
+          <Text style={styles.statValue}>1240</Text>
 
-          <Text style={styles.statLabel}>
-            Vehicles
-          </Text>
+          <Text style={styles.statLabel}>Vehicles</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            HIGH
-          </Text>
+          <Text style={styles.statValue}>HIGH</Text>
 
-          <Text style={styles.statLabel}>
-            Traffic
-          </Text>
+          <Text style={styles.statLabel}>Traffic</Text>
         </View>
-
       </View>
 
       {/* Camera Details Popup */}
@@ -132,7 +181,6 @@ export default function DashboardScreen() {
         camera={selectedCamera}
         onClose={handleCloseCamera}
       />
-
     </View>
   );
 }
@@ -178,6 +226,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     marginBottom: 15,
+  },
+
+  error: {
+    color: "#d93025",
+    fontSize: 14,
+    marginBottom: 10,
+    marginTop: 4,
   },
 
   mapContainer: {
