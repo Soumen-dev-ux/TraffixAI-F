@@ -1,31 +1,5 @@
-import { View, Text, StyleSheet } from "react-native";
+import DashboardScreen from "@/src/presentation/screens/DashboardScreen";
 
-export default function HomeScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>TraffixAI</Text>
-      <Text style={styles.subtitle}>
-        City-Wide AI Traffic Intelligence
-      </Text>
-    </View>
-  );
+export default function Index(){
+  return <DashboardScreen />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-  },
-
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-  },
-});
