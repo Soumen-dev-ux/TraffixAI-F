@@ -15,6 +15,7 @@ import { Camera } from "../../domain/models/Camera";
 import { GetCameras } from "../../domain/usecases/GetCameras";
 import VehicleResultCard from "../components/VehicleResultcard";
 import VehicleSearch from "../components/VehicleSearch";
+import VehicleDetails from "../components/VehicleDetails";
 
 export default function DashboardScreen() {
   // Camera data
@@ -34,6 +35,7 @@ export default function DashboardScreen() {
 
   const [vehicleError, setVehicleError] = useState("");
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
+  const [showVehicleDetails, setShowVehicleDetails] = useState(false);
 
   //search function
 
@@ -66,6 +68,26 @@ export default function DashboardScreen() {
         const trajectoryResult = await getVehicleTrajectory.execute(searchText);
 
         setTrajectory(trajectoryResult);
+        
+if (
+  trajectoryResult &&
+  trajectoryResult.detections.length > 0
+) {
+  const latest =
+    trajectoryResult.detections[
+      trajectoryResult.detections.length - 1
+    ];
+
+  setVehicle({
+    ...result,
+    latitude: latest.latitude,
+    longitude: latest.longitude,
+    cameraId: latest.cameraId,
+    cameraName: latest.cameraName,
+    detectedAt: latest.detectedAt,
+  });
+}
+
       } else {
         setVehicle(null);
         setTrajectory(null);
@@ -143,6 +165,14 @@ export default function DashboardScreen() {
           }}
         />
       ) : null}
+      {vehicle && showVehicleDetails && (
+  <VehicleDetails
+    vehicle={vehicle}
+    trajectory={trajectory}
+    onClose={() => setShowVehicleDetails(false)}
+  />
+)}
+      
 
       {/* City Map */}
       <View style={styles.mapContainer}>
