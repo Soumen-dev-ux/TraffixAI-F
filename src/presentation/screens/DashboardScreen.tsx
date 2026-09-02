@@ -4,18 +4,22 @@ import { StyleSheet, Text, View } from "react-native";
 import CameraBottomSheet from "../components/CameraBottomSheet";
 import CityMap from "../components/CityMap";
 
+import { MockTrafficAnalyticsReposiory } from "@/src/data/repositories/MockTrafficAnalyticsRepository";
 import { MockVehicleRepository } from "@/src/data/repositories/MockVehicleRepository";
+import { TrafficAnalytics } from "@/src/domain/models/TrafficAnalytics";
 import { Vehicle } from "@/src/domain/models/Vehicle";
 import { VehicleTrajectory } from "@/src/domain/models/VehicleTrajectory";
+import { GetTrafficAnalytics } from "@/src/domain/usecases/GetTrafficAnalytics";
 import { GetVehicleTrajectory } from "@/src/domain/usecases/GetVehicleTrajectory";
 import { SearchVehicle } from "@/src/domain/usecases/searchVehicle";
 import { MockCameraRepository } from "../../data/repositories/MockCameraRepository";
 import { MockVehicleTrajectoryRepository } from "../../data/repositories/MockVehicleTrajectoryRepository";
 import { Camera } from "../../domain/models/Camera";
 import { GetCameras } from "../../domain/usecases/GetCameras";
+import TrafficAnalyticsPanel from "../components/TrafficAnalyticsPanel";
+import VehicleDetails from "../components/VehicleDetails";
 import VehicleResultCard from "../components/VehicleResultcard";
 import VehicleSearch from "../components/VehicleSearch";
-import VehicleDetails from "../components/VehicleDetails";
 
 export default function DashboardScreen() {
   // Camera data
@@ -36,6 +40,13 @@ export default function DashboardScreen() {
   const [vehicleError, setVehicleError] = useState("");
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
   const [showVehicleDetails, setShowVehicleDetails] = useState(false);
+  const [analytics, setAnalytics] = useState<TrafficAnalytics | null>(null);
+
+  useEffect(() => {
+    const repository = new MockTrafficAnalyticsReposiory();
+    const useCase = new GetTrafficAnalytics(repository);
+    useCase.execute().then(setAnalytics);
+  }, []);
 
   //search function
 
@@ -68,26 +79,20 @@ export default function DashboardScreen() {
         const trajectoryResult = await getVehicleTrajectory.execute(searchText);
 
         setTrajectory(trajectoryResult);
-        
-if (
-  trajectoryResult &&
-  trajectoryResult.detections.length > 0
-) {
-  const latest =
-    trajectoryResult.detections[
-      trajectoryResult.detections.length - 1
-    ];
 
-  setVehicle({
-    ...result,
-    latitude: latest.latitude,
-    longitude: latest.longitude,
-    cameraId: latest.cameraId,
-    cameraName: latest.cameraName,
-    detectedAt: latest.detectedAt,
-  });
-}
+        if (trajectoryResult && trajectoryResult.detections.length > 0) {
+          const latest =
+            trajectoryResult.detections[trajectoryResult.detections.length - 1];
 
+          setVehicle({
+            ...result,
+            latitude: latest.latitude,
+            longitude: latest.longitude,
+            cameraId: latest.cameraId,
+            cameraName: latest.cameraName,
+            detectedAt: latest.detectedAt,
+          });
+        }
       } else {
         setVehicle(null);
         setTrajectory(null);
@@ -166,13 +171,12 @@ if (
         />
       ) : null}
       {vehicle && showVehicleDetails && (
-  <VehicleDetails
-    vehicle={vehicle}
-    trajectory={trajectory}
-    onClose={() => setShowVehicleDetails(false)}
-  />
-)}
-      
+        <VehicleDetails
+          vehicle={vehicle}
+          trajectory={trajectory}
+          onClose={() => setShowVehicleDetails(false)}
+        />
+      )}
 
       {/* City Map */}
       <View style={styles.mapContainer}>
@@ -205,11 +209,13 @@ if (
         </View>
       </View>
 
+      {analytics && <TrafficAnalyticsPanel analytics={analytics} />}
+
       {/* Camera Details Popup */}
       <CameraBottomSheet
         visible={!!selectedCamera}
         camera={selectedCamera}
-        onClose={()=> setSelectedCamera(null)}
+        onClose={() => setSelectedCamera(null)}
       />
     </View>
   );
