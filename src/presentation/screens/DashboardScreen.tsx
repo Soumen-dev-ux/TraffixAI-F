@@ -207,9 +207,9 @@ if (
 
       {/* Camera Details Popup */}
       <CameraBottomSheet
-        visible={cameraVisible}
+        visible={!!selectedCamera}
         camera={selectedCamera}
-        onClose={handleCloseCamera}
+        onClose={()=> setSelectedCamera(null)}
       />
     </View>
   );

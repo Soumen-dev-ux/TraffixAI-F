@@ -1,137 +1,204 @@
+import React from "react";
 import {
   Modal,
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
+  ScrollView,
 } from "react-native";
 
-type Camera = {
-  id: string;
-  name: string;
-  latitude: number;
-  longitude: number;
-};
+import { Camera } from "../../domain/models/Camera";
 
 type Props = {
-  visible: boolean;
   camera: Camera | null;
+  visible: boolean;
   onClose: () => void;
 };
 
+const vehicleIcons = {
+  car: "🚗",
+  motorcycle: "🏍️",
+  bus: "🚌",
+  truck: "🚚",
+  van: "🚐",
+  taxi: "🚕",
+};
+
+const trafficColors = {
+  low: "🟢",
+  moderate: "🟠",
+  high: "🔴",
+  critical: "🔴",
+};
+
 export default function CameraBottomSheet({
-  visible,
   camera,
+  visible,
   onClose,
 }: Props) {
+  if (!camera) return null;
+
+  const vehicles = camera.detectedVehicles;
+
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="slide"
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <View style={styles.sheet}>
+          <View style={styles.handle} />
 
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Camera Details</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>📹 {camera.id}</Text>
+                <Text style={styles.location}>{camera.name}</Text>
+              </View>
 
-              {camera && (
-                <Text style={styles.cameraName}>
-                  {camera.name}
-                </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={onClose}
+              >
+                <Text style={styles.closeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Camera Feed */}
+            <View style={styles.feed}>
+              <Text style={styles.feedIcon}>🎥</Text>
+
+              <Text style={styles.feedText}>
+                {camera.status === "online"
+                  ? "LIVE CAMERA FEED"
+                  : "CAMERA OFFLINE"}
+              </Text>
+
+              {camera.status === "online" && (
+                <View style={styles.fakeVehicles}>
+                  <Text>🚗</Text>
+                  <Text>🚗</Text>
+                  <Text>🏍️</Text>
+                  <Text>🚌</Text>
+                  <Text>🚚</Text>
+                </View>
+              )}
+
+              {camera.status === "online" && (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>LIVE</Text>
+                </View>
               )}
             </View>
 
-            <Pressable onPress={onClose}>
-              <Text style={styles.close}>✕</Text>
-            </Pressable>
-          </View>
+            {/* Camera Status */}
+            <View style={styles.infoRow}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>STATUS</Text>
 
-          {/* Camera Feed */}
-          <View style={styles.feed}>
-            <Text style={styles.feedText}>
-              📹 CAMERA FEED
-            </Text>
+                <Text style={styles.infoValue}>
+                  {camera.status === "online"
+                    ? "🟢 Online"
+                    : "🔴 Offline"}
+                </Text>
+              </View>
 
-            <Text style={styles.feedSubtext}>
-              Live footage will appear here
-            </Text>
-          </View>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>FPS</Text>
+                <Text style={styles.infoValue}>
+                  {camera.fps}
+                </Text>
+              </View>
 
-          {/* Camera information */}
-          {camera && (
-            <View style={styles.info}>
-
-              <InfoRow
-                label="Camera ID"
-                value={camera.id}
-              />
-
-              <InfoRow
-                label="Location"
-                value={camera.name}
-              />
-
-              <InfoRow
-                label="Status"
-                value="🟢 Online"
-              />
-
-              <InfoRow
-                label="FPS"
-                value="24"
-              />
-
-              <InfoRow
-                label="Vehicles"
-                value="71"
-              />
-
-              <InfoRow
-                label="Congestion"
-                value="🔴 High"
-              />
-
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>VEHICLES</Text>
+                <Text style={styles.infoValue}>
+                  {camera.vehicleCount}
+                </Text>
+              </View>
             </View>
-          )}
 
-          <Pressable
-            style={styles.button}
-            onPress={onClose}
-          >
-            <Text style={styles.buttonText}>
-              Close
-            </Text>
-          </Pressable>
+            {/* Traffic Level */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Traffic Intelligence
+              </Text>
 
+              <View style={styles.trafficCard}>
+                <Text style={styles.trafficEmoji}>
+                  {trafficColors[camera.trafficLevel]}
+                </Text>
+
+                <View>
+                  <Text style={styles.trafficTitle}>
+                    {camera.trafficLevel.toUpperCase()}
+                  </Text>
+
+                  <Text style={styles.trafficSubtitle}>
+                    Current traffic condition
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Vehicle Breakdown */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Detected Vehicles
+              </Text>
+
+              <View style={styles.vehicleGrid}>
+                {Object.entries(vehicles).map(([type, count]) => (
+                  <View style={styles.vehicleCard} key={type}>
+                    <Text style={styles.vehicleEmoji}>
+                      {vehicleIcons[type as keyof typeof vehicleIcons]}
+                    </Text>
+
+                    <Text style={styles.vehicleCount}>
+                      {count}
+                    </Text>
+
+                    <Text style={styles.vehicleType}>
+                      {type}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Camera Location
+              </Text>
+
+              <View style={styles.locationCard}>
+                <Text style={styles.locationText}>
+                  📍 {camera.name}
+                </Text>
+
+                <Text style={styles.coordinates}>
+                  {camera.latitude.toFixed(4)},{" "}
+                  {camera.longitude.toFixed(4)}
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
 
@@ -139,82 +206,208 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    maxHeight: "90%",
     padding: 20,
-    paddingBottom: 30,
+  },
+
+  handle: {
+    width: 45,
+    height: 5,
+    backgroundColor: "#ccc",
+    borderRadius: 10,
+    alignSelf: "center",
+    marginBottom: 18,
   },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 18,
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
   },
 
-  cameraName: {
-    color: "#777",
+  location: {
     marginTop: 4,
+    color: "#666",
+    fontSize: 14,
   },
 
-  close: {
-    fontSize: 22,
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f1f1f1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  closeText: {
+    fontSize: 18,
     color: "#555",
   },
 
   feed: {
-    height: 180,
-    backgroundColor: "#1e1e1e",
-    borderRadius: 15,
+    height: 200,
+    backgroundColor: "#17202a",
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  feedIcon: {
+    fontSize: 40,
   },
 
   feedText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-
-  feedSubtext: {
-    color: "#aaa",
     marginTop: 8,
-  },
-
-  info: {
-    gap: 12,
-  },
-
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  label: {
-    color: "#777",
-    fontSize: 15,
-  },
-
-  value: {
     fontWeight: "600",
+  },
+
+  fakeVehicles: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+    fontSize: 24,
+  },
+
+  liveBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    backgroundColor: "#222",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22c55e",
+    marginRight: 6,
+  },
+
+  liveText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+
+  infoBox: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    padding: 12,
+    borderRadius: 12,
+  },
+
+  infoLabel: {
+    fontSize: 10,
+    color: "#777",
+    fontWeight: "600",
+  },
+
+  infoValue: {
+    marginTop: 5,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  section: {
+    marginTop: 22,
+  },
+
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+
+  trafficCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f7f7f7",
+    padding: 15,
+    borderRadius: 14,
+  },
+
+  trafficEmoji: {
+    fontSize: 26,
+    marginRight: 12,
+  },
+
+  trafficTitle: {
+    fontWeight: "700",
     fontSize: 15,
   },
 
-  button: {
-    backgroundColor: "#111",
-    padding: 15,
+  trafficSubtitle: {
+    color: "#777",
+    marginTop: 3,
+    fontSize: 12,
+  },
+
+  vehicleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  vehicleCard: {
+    width: "30%",
+    minWidth: 90,
+    backgroundColor: "#f7f7f7",
+    padding: 12,
     borderRadius: 12,
     alignItems: "center",
-    marginTop: 20,
   },
 
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
+  vehicleEmoji: {
+    fontSize: 25,
+  },
+
+  vehicleCount: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+
+  vehicleType: {
+    color: "#777",
+    fontSize: 12,
+    textTransform: "capitalize",
+    marginTop: 2,
+  },
+
+  locationCard: {
+    backgroundColor: "#f7f7f7",
+    padding: 14,
+    borderRadius: 12,
+  },
+
+  locationText: {
     fontWeight: "600",
+  },
+
+  coordinates: {
+    color: "#777",
+    marginTop: 5,
+    fontSize: 12,
   },
 });
