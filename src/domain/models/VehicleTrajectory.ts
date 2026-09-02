@@ -1,22 +1,17 @@
+import { VehicleType } from "./Vehicle";
+
 export type VehicleDetection = {
-  id : string;
-  cameraId : string;
-  cameraName : string;
-  latitude : number;
-  longitude : number;
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  latitude: number;
+  longitude: number;
   detectedAt: string;
 };
 
 export type VehicleTrajectory = {
-  vehicleId : string;
+  vehicleId: string;
   plateNumber: string;
-  vehicleType:
-    | "car"
-    | "motorcycle"
-    | "bus"
-    | "track"
-    | "van"
-    | "taxi";
-
+  vehicleType: VehicleType;
   detections: VehicleDetection[];
 };

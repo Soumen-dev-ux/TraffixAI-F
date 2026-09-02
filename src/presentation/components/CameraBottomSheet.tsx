@@ -1,11 +1,13 @@
 import React from "react";
 import {
   Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { Camera } from "../../domain/models/Camera";
@@ -39,23 +41,33 @@ export default function CameraBottomSheet({
 }: Props) {
   if (!camera) return null;
 
+  const isWeb = Platform.OS === "web";
   const vehicles = camera.detectedVehicles;
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType={isWeb ? "fade" : "slide"}
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+      <View style={[styles.overlay, isWeb && styles.webOverlay]}>
+        {/* Backdrop Pressable */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Modal Card / Bottom Sheet View */}
+        <View style={[styles.sheet, isWeb && styles.webSheet]}>
+          {!isWeb && <View style={styles.handle} />}
+
+          <ScrollView
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
             {/* Header */}
             <View style={styles.header}>
-              <View>
+              <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={styles.title}>📹 {camera.id}</Text>
                 <Text style={styles.location}>{camera.name}</Text>
               </View>
@@ -100,7 +112,6 @@ export default function CameraBottomSheet({
             <View style={styles.infoRow}>
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>STATUS</Text>
-
                 <Text style={styles.infoValue}>
                   {camera.status === "online"
                     ? "🟢 Online"
@@ -110,24 +121,18 @@ export default function CameraBottomSheet({
 
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>FPS</Text>
-                <Text style={styles.infoValue}>
-                  {camera.fps}
-                </Text>
+                <Text style={styles.infoValue}>{camera.fps}</Text>
               </View>
 
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>VEHICLES</Text>
-                <Text style={styles.infoValue}>
-                  {camera.vehicleCount}
-                </Text>
+                <Text style={styles.infoValue}>{camera.vehicleCount}</Text>
               </View>
             </View>
 
             {/* Traffic Level */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Traffic Intelligence
-              </Text>
+              <Text style={styles.sectionTitle}>Traffic Intelligence</Text>
 
               <View style={styles.trafficCard}>
                 <Text style={styles.trafficEmoji}>
@@ -148,9 +153,7 @@ export default function CameraBottomSheet({
 
             {/* Vehicle Breakdown */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Detected Vehicles
-              </Text>
+              <Text style={styles.sectionTitle}>Detected Vehicles</Text>
 
               <View style={styles.vehicleGrid}>
                 {Object.entries(vehicles).map(([type, count]) => (
@@ -159,13 +162,9 @@ export default function CameraBottomSheet({
                       {vehicleIcons[type as keyof typeof vehicleIcons]}
                     </Text>
 
-                    <Text style={styles.vehicleCount}>
-                      {count}
-                    </Text>
+                    <Text style={styles.vehicleCount}>{count}</Text>
 
-                    <Text style={styles.vehicleType}>
-                      {type}
-                    </Text>
+                    <Text style={styles.vehicleType}>{type}</Text>
                   </View>
                 ))}
               </View>
@@ -173,18 +172,13 @@ export default function CameraBottomSheet({
 
             {/* Location */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Camera Location
-              </Text>
+              <Text style={styles.sectionTitle}>Camera Location</Text>
 
               <View style={styles.locationCard}>
-                <Text style={styles.locationText}>
-                  📍 {camera.name}
-                </Text>
+                <Text style={styles.locationText}>📍 {camera.name}</Text>
 
                 <Text style={styles.coordinates}>
-                  {camera.latitude.toFixed(4)},{" "}
-                  {camera.longitude.toFixed(4)}
+                  {camera.latitude.toFixed(4)}, {camera.longitude.toFixed(4)}
                 </Text>
               </View>
             </View>
@@ -201,58 +195,77 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
-
+  webOverlay: {
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    paddingTop: 24,
+    paddingRight: 24,
+    backgroundColor: "rgba(0, 0, 0, 0.25)",
+  },
   sheet: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "90%",
-    padding: 20,
+    maxHeight: "85%",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
-
+  webSheet: {
+    width: 380,
+    maxWidth: "90%",
+    maxHeight: 650,
+    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   handle: {
     width: 45,
     height: 5,
     backgroundColor: "#ccc",
     borderRadius: 10,
     alignSelf: "center",
-    marginBottom: 18,
+    marginBottom: 14,
   },
-
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 18,
   },
-
   title: {
     fontSize: 20,
     fontWeight: "700",
+    color: "#111827",
   },
-
   location: {
     marginTop: 4,
-    color: "#666",
+    color: "#6b7280",
     fontSize: 14,
   },
-
   closeButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f1f1f1",
+    backgroundColor: "#f3f4f6",
     justifyContent: "center",
     alignItems: "center",
   },
-
   closeText: {
     fontSize: 18,
-    color: "#555",
+    color: "#4b5563",
   },
-
   feed: {
-    height: 200,
+    height: 180,
     backgroundColor: "#17202a",
     borderRadius: 16,
     justifyContent: "center",
@@ -260,24 +273,20 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-
   feedIcon: {
     fontSize: 40,
   },
-
   feedText: {
     color: "#fff",
     marginTop: 8,
     fontWeight: "600",
   },
-
   fakeVehicles: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 20,
-    fontSize: 24,
+    marginTop: 16,
+    fontSize: 22,
   },
-
   liveBadge: {
     position: "absolute",
     top: 12,
@@ -289,7 +298,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-
   liveDot: {
     width: 8,
     height: 8,
@@ -297,116 +305,110 @@ const styles = StyleSheet.create({
     backgroundColor: "#22c55e",
     marginRight: 6,
   },
-
   liveText: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 12,
   },
-
   infoRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 16,
   },
-
   infoBox: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f9fafb",
     padding: 12,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
   },
-
   infoLabel: {
     fontSize: 10,
-    color: "#777",
+    color: "#6b7280",
     fontWeight: "600",
   },
-
   infoValue: {
     marginTop: 5,
     fontSize: 15,
     fontWeight: "700",
+    color: "#111827",
   },
-
   section: {
-    marginTop: 22,
+    marginTop: 20,
   },
-
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     marginBottom: 10,
+    color: "#111827",
   },
-
   trafficCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f7f7f7",
-    padding: 15,
+    backgroundColor: "#f9fafb",
+    padding: 14,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
   },
-
   trafficEmoji: {
     fontSize: 26,
     marginRight: 12,
   },
-
   trafficTitle: {
     fontWeight: "700",
     fontSize: 15,
+    color: "#111827",
   },
-
   trafficSubtitle: {
-    color: "#777",
+    color: "#6b7280",
     marginTop: 3,
     fontSize: 12,
   },
-
   vehicleGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
-
   vehicleCard: {
-    width: "30%",
-    minWidth: 90,
-    backgroundColor: "#f7f7f7",
+    flex: 1,
+    minWidth: 80,
+    backgroundColor: "#f9fafb",
     padding: 12,
     borderRadius: 12,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
   },
-
   vehicleEmoji: {
-    fontSize: 25,
+    fontSize: 24,
   },
-
   vehicleCount: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     marginTop: 4,
+    color: "#111827",
   },
-
   vehicleType: {
-    color: "#777",
-    fontSize: 12,
+    color: "#6b7280",
+    fontSize: 11,
     textTransform: "capitalize",
     marginTop: 2,
   },
-
   locationCard: {
-    backgroundColor: "#f7f7f7",
+    backgroundColor: "#f9fafb",
     padding: 14,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
   },
-
   locationText: {
     fontWeight: "600",
+    color: "#111827",
   },
-
   coordinates: {
-    color: "#777",
+    color: "#6b7280",
     marginTop: 5,
     fontSize: 12,
   },

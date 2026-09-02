@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import CameraBottomSheet from "../components/CameraBottomSheet";
 import CityMap from "../components/CityMap";
@@ -28,9 +28,6 @@ export default function DashboardScreen() {
   // Selected camera
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
-  // Camera popup visibility
-  const [cameraVisible, setCameraVisible] = useState(false);
-
   const [searchText, setSearchText] = useState("");
 
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -48,11 +45,10 @@ export default function DashboardScreen() {
     useCase.execute().then(setAnalytics);
   }, []);
 
-  //search function
-
+  // Search function
   const handleVehicleSearch = async () => {
     if (!searchText.trim()) {
-      setVehicleError("Enter a vehicle number");
+      setVehicleError("Enter a vehicle number (e.g. WB12AB1234)");
       return;
     }
 
@@ -62,18 +58,15 @@ export default function DashboardScreen() {
 
     try {
       const repository = new MockVehicleRepository();
-
       const searchVehicle = new SearchVehicle(repository);
-
       const result = await searchVehicle.execute(searchText);
 
       if (result) {
         setVehicle(result);
 
         const trajectoryRepository = new MockVehicleTrajectoryRepository();
-
         const getVehicleTrajectory = new GetVehicleTrajectory(
-          trajectoryRepository,
+          trajectoryRepository
         );
 
         const trajectoryResult = await getVehicleTrajectory.execute(searchText);
@@ -93,14 +86,16 @@ export default function DashboardScreen() {
             detectedAt: latest.detectedAt,
           });
         }
+        setShowVehicleDetails(true);
       } else {
         setVehicle(null);
         setTrajectory(null);
-        setVehicleError("Vehicle not found");
+        setShowVehicleDetails(false);
+        setVehicleError("Vehicle not found. Try searching 'WB12AB1234' or 'WB06CD5678'");
       }
     } catch (error) {
       console.error(error);
-      setVehicleError("Something went wrong");
+      setVehicleError("Something went wrong while searching.");
     } finally {
       setVehicleLoading(false);
     }
@@ -111,11 +106,8 @@ export default function DashboardScreen() {
     const loadCameras = async () => {
       try {
         const repository = new MockCameraRepository();
-
         const getCameras = new GetCameras(repository);
-
         const data = await getCameras.execute();
-
         setCameras(data);
       } catch (error) {
         console.error("Failed to load cameras:", error);
@@ -128,34 +120,33 @@ export default function DashboardScreen() {
   // Camera marker pressed
   const handleCameraPress = (camera: Camera) => {
     setSelectedCamera(camera);
-    setCameraVisible(true);
-  };
-
-  // Close camera popup
-  const handleCloseCamera = () => {
-    setCameraVisible(false);
-    setSelectedCamera(null);
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.logo}>TraffixAI</Text>
-
           <Text style={styles.subtitle}>City Traffic Intelligence</Text>
         </View>
 
         <View style={styles.profile}>
-          <Text>👤</Text>
+          <Text style={styles.profileEmoji}>👤</Text>
         </View>
       </View>
 
       {/* Vehicle Search */}
       <VehicleSearch
         value={searchText}
-        onChangeText={setSearchText}
+        onChangeText={(text) => {
+          setSearchText(text);
+          if (vehicleError) setVehicleError("");
+        }}
         onSearch={handleVehicleSearch}
         loading={vehicleLoading}
       />
@@ -166,10 +157,11 @@ export default function DashboardScreen() {
         <VehicleResultCard
           vehicle={vehicle}
           onPress={() => {
-            console.log("Vehicle selected:", vehicle);
+            setShowVehicleDetails(true);
           }}
         />
       ) : null}
+
       {vehicle && showVehicleDetails && (
         <VehicleDetails
           vehicle={vehicle}
@@ -192,19 +184,20 @@ export default function DashboardScreen() {
       <View style={styles.stats}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{cameras.length}</Text>
-
           <Text style={styles.statLabel}>Cameras</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>1240</Text>
-
+          <Text style={styles.statValue}>
+            {analytics ? analytics.totalVehicles : 91}
+          </Text>
           <Text style={styles.statLabel}>Vehicles</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>HIGH</Text>
-
+          <Text style={styles.statValue}>
+            {analytics ? analytics.congestionLevel.toUpperCase() : "HIGH"}
+          </Text>
           <Text style={styles.statLabel}>Traffic</Text>
         </View>
       </View>
@@ -217,7 +210,7 @@ export default function DashboardScreen() {
         camera={selectedCamera}
         onClose={() => setSelectedCamera(null)}
       />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -225,80 +218,78 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f6f8",
-    padding: 20,
   },
-
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 40,
+    marginTop: 20,
     marginBottom: 20,
   },
-
   logo: {
     fontSize: 28,
     fontWeight: "bold",
+    color: "#111827",
   },
-
   subtitle: {
-    color: "#777",
+    color: "#6b7280",
     marginTop: 3,
+    fontSize: 14,
   },
-
   profile: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#e5e5e5",
+    backgroundColor: "#e5e7eb",
     justifyContent: "center",
     alignItems: "center",
   },
-
-  search: {
-    height: 50,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 15,
+  profileEmoji: {
+    fontSize: 20,
   },
-
   error: {
-    color: "#d93025",
+    color: "#dc2626",
     fontSize: 14,
     marginBottom: 10,
     marginTop: 4,
   },
-
   mapContainer: {
-    flex: 1,
-    minHeight: 400,
+    height: 420,
     borderRadius: 18,
     overflow: "hidden",
-    marginBottom: 15,
+    marginBottom: 20,
+    backgroundColor: "#e5e7eb",
   },
-
   stats: {
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
+    marginBottom: 20,
   },
-
   statCard: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#ffffff",
     borderRadius: 14,
-    padding: 15,
+    padding: 16,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-
   statValue: {
     fontSize: 20,
     fontWeight: "bold",
+    color: "#111827",
   },
-
   statLabel: {
     marginTop: 5,
-    color: "#777",
+    color: "#6b7280",
+    fontSize: 12,
+    fontWeight: "500",
   },
 });

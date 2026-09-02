@@ -12,7 +12,6 @@ const dummyVehicles: Vehicle[] = [
     longitude: 88.3525,
     detectedAt: "10:42:18",
   },
-
   {
     id: "VH_002",
     plateNumber: "WB06CD5678",
@@ -24,7 +23,6 @@ const dummyVehicles: Vehicle[] = [
     longitude: 88.3512,
     detectedAt: "10:45:32",
   },
-
   {
     id: "VH_003",
     plateNumber: "WB24EF9012",
@@ -36,7 +34,6 @@ const dummyVehicles: Vehicle[] = [
     longitude: 88.4331,
     detectedAt: "10:48:05",
   },
-
   {
     id: "VH_004",
     plateNumber: "WB18GH3456",
@@ -51,19 +48,16 @@ const dummyVehicles: Vehicle[] = [
 ];
 
 export const vehicleApi = {
-  async searchVehicle(
-    plateNumber: string
-  ): Promise<Vehicle | null> {
+  async searchVehicle(plateNumber: string): Promise<Vehicle | null> {
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 800)
-    );
+    const cleanQuery = plateNumber.replace(/[\s-]/g, "").toLowerCase();
+    if (!cleanQuery) return null;
 
-    const vehicle = dummyVehicles.find(
-      (vehicle) =>
-        vehicle.plateNumber.toLowerCase() ===
-        plateNumber.trim().toLowerCase()
-    );
+    const vehicle = dummyVehicles.find((item) => {
+      const cleanPlate = item.plateNumber.replace(/[\s-]/g, "").toLowerCase();
+      return cleanPlate === cleanQuery || cleanPlate.includes(cleanQuery);
+    });
 
     return vehicle || null;
   },
