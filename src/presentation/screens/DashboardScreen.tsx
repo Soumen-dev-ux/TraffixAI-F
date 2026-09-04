@@ -20,6 +20,9 @@ import TrafficAnalyticsPanel from "../components/TrafficAnalyticsPanel";
 import VehicleDetails from "../components/VehicleDetails";
 import VehicleResultCard from "../components/VehicleResultcard";
 import VehicleSearch from "../components/VehicleSearch";
+import { RealtimeEvent } from "@/src/domain/models/RealTimeEvent";
+import { SubscribeToRealtimeUpdates } from "@/src/domain/usecases/SubscribeToRealtimeUpdates";
+import { MockRealtimeRepository } from "@/src/data/repositories/MockRealtimeRepository";
 
 export default function DashboardScreen() {
   // Camera data
@@ -38,6 +41,25 @@ export default function DashboardScreen() {
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
   const [showVehicleDetails, setShowVehicleDetails] = useState(false);
   const [analytics, setAnalytics] = useState<TrafficAnalytics | null>(null);
+  const [lastRealtimeEvent, setLastRealtimeEvent] =
+  useState<RealtimeEvent | null>(null);
+
+
+useEffect(() => {
+  const repository =
+    new MockRealtimeRepository();
+
+  const useCase =
+    new SubscribeToRealtimeUpdates(repository);
+
+  const unsubscribe = useCase.execute((event) => {
+    console.log("Realtime event:", event);
+
+    setLastRealtimeEvent(event);
+  });
+
+  return unsubscribe;
+}, []);
 
   useEffect(() => {
     const repository = new MockTrafficAnalyticsReposiory();
