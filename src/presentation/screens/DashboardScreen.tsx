@@ -20,7 +20,7 @@ import TrafficAnalyticsPanel from "../components/TrafficAnalyticsPanel";
 import VehicleDetails from "../components/VehicleDetails";
 import VehicleResultCard from "../components/VehicleResultcard";
 import VehicleSearch from "../components/VehicleSearch";
-import { RealtimeEvent } from "@/src/domain/models/RealTimeEvent";
+import { RealtimeEvent } from "@/src/domain/models/RealtimeEvent";
 import { SubscribeToRealtimeUpdates } from "@/src/domain/usecases/SubscribeToRealtimeUpdates";
 import { MockRealtimeRepository } from "@/src/data/repositories/MockRealtimeRepository";
 

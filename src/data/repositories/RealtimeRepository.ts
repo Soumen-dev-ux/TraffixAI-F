@@ -1,4 +1,4 @@
-import { RealtimeEvent } from "@/src/domain/models/RealTimeEvent";
+import { RealtimeEvent } from "@/src/domain/models/RealtimeEvent";
 
 export interface RealtimeRepository {
   subscribe(

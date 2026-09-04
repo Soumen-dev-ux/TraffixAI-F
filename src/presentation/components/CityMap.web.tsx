@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { getTrafficHeatmapPoints } from "../../data/api/mockHeatmapData";
 import { Camera } from "../../domain/models/Camera";
 import { Vehicle } from "../../domain/models/Vehicle";
 import { VehicleTrajectory } from "../../domain/models/VehicleTrajectory";
@@ -36,6 +37,7 @@ export default function CityMap({
   trajectory,
   onCameraPress,
 }: Props) {
+  const [showHeatmap, setShowHeatmap] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const camerasRef = useRef(cameras);
   camerasRef.current = cameras;
@@ -62,12 +64,15 @@ export default function CityMap({
   // Send message to update iframe map data
   const updateMapData = () => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
+      const heatmapPoints = getTrafficHeatmapPoints(cameras);
       iframeRef.current.contentWindow.postMessage(
         {
           type: "UPDATE_DATA",
           cameras,
           vehicle,
           trajectory,
+          showHeatmap,
+          heatmapPoints,
         },
         "*"
       );
@@ -76,7 +81,7 @@ export default function CityMap({
 
   useEffect(() => {
     updateMapData();
-  }, [cameras, vehicle, trajectory]);
+  }, [cameras, vehicle, trajectory, showHeatmap]);
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -86,6 +91,7 @@ export default function CityMap({
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <style>
     html, body, #map {
       margin: 0;
@@ -157,6 +163,7 @@ export default function CityMap({
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    var heatLayer = null;
     var cameraLayerGroup = L.layerGroup().addTo(map);
     var trajectoryLayerGroup = L.layerGroup().addTo(map);
     var vehicleLayerGroup = L.layerGroup().addTo(map);
@@ -178,6 +185,32 @@ export default function CityMap({
       var cameras = data.cameras || [];
       var vehicle = data.vehicle;
       var trajectory = data.trajectory;
+      var showHeatmap = data.showHeatmap;
+      var heatmapPoints = data.heatmapPoints || [];
+
+      // Update Heatmap
+      if (heatLayer) {
+        map.removeLayer(heatLayer);
+        heatLayer = null;
+      }
+      if (showHeatmap && heatmapPoints.length > 0 && typeof L.heatLayer === 'function') {
+        var heatPoints = heatmapPoints.map(function(p) {
+          return [p.latitude, p.longitude, p.weight];
+        });
+        heatLayer = L.heatLayer(heatPoints, {
+          radius: 32,
+          blur: 20,
+          maxZoom: 16,
+          max: 1.0,
+          gradient: {
+            0.2: '#3b82f6',
+            0.4: '#06b6d4',
+            0.6: '#10b981',
+            0.8: '#f59e0b',
+            1.0: '#ef4444'
+          }
+        }).addTo(map);
+      }
 
       // Update Cameras
       cameraLayerGroup.clearLayers();
@@ -280,6 +313,26 @@ export default function CityMap({
         onLoad: updateMapData,
       })}
 
+      {/* Heatmap Layer Toggle Control */}
+      <TouchableOpacity
+        style={[
+          styles.heatmapToggle,
+          showHeatmap ? styles.heatmapToggleActive : styles.heatmapToggleInactive,
+        ]}
+        onPress={() => setShowHeatmap(!showHeatmap)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.heatmapToggleEmoji}>🔥</Text>
+        <Text
+          style={[
+            styles.heatmapToggleText,
+            showHeatmap ? styles.textActive : styles.textInactive,
+          ]}
+        >
+          {showHeatmap ? "Heatmap On" : "Heatmap Off"}
+        </Text>
+      </TouchableOpacity>
+
       {/* Map Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
@@ -300,6 +353,14 @@ export default function CityMap({
             <Text style={styles.legendText}>Route</Text>
           </View>
         )}
+
+        {showHeatmap && (
+          <View style={[styles.legendItem, styles.heatmapLegendItem]}>
+            <Text style={styles.densityLabel}>Low</Text>
+            <View style={styles.heatGradientBar} />
+            <Text style={styles.densityLabel}>High</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -315,11 +376,56 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
   },
+  heatmapToggle: {
+    position: "absolute",
+    top: 15,
+    right: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    zIndex: 10,
+  },
+  heatmapToggleActive: {
+    backgroundColor: "#1e293b",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+  },
+  heatmapToggleInactive: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  heatmapToggleEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  heatmapToggleText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  textActive: {
+    color: "#f59e0b",
+  },
+  textInactive: {
+    color: "#64748b",
+  },
   legend: {
     position: "absolute",
     bottom: 15,
     left: 15,
     flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
     backgroundColor: "#ffffff",
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -354,5 +460,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#2563eb",
     marginRight: 5,
+  },
+  heatmapLegendItem: {
+    borderLeftWidth: 1,
+    borderLeftColor: "#cbd5e1",
+    paddingLeft: 10,
+    marginRight: 0,
+  },
+  densityLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#64748b",
+  },
+  heatGradientBar: {
+    width: 60,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 5,
+    // Linear gradient simulation for web / react-native-web
+    // @ts-ignore
+    background: "linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #f59e0b, #ef4444)",
+    backgroundColor: "#f59e0b",
   },
 });
