@@ -15,7 +15,7 @@ export function getMapHtmlContent(): string {
     html, body, #map {
       width: 100%;
       height: 100%;
-      background: #0f172a;
+      background: #f8fafc;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
@@ -221,13 +221,7 @@ export function getMapHtmlContent(): string {
           type: 'raster',
           source: 'osm-tiles',
           minzoom: 0,
-          maxzoom: 22,
-          paint: {
-            'raster-saturation': -0.85,
-            'raster-contrast': 0.25,
-            'raster-brightness-min': 0.12,
-            'raster-brightness-max': 0.48
-          }
+          maxzoom: 22
         },
         {
           id: '3d-buildings-layer',
@@ -237,10 +231,10 @@ export function getMapHtmlContent(): string {
           paint: {
             'fill-extrusion-color': [
               'interpolate', ['linear'], ['get', 'height'],
-              12, '#1e293b',
-              20, '#334155',
-              30, '#475569',
-              45, '#64748b'
+              12, '#ffffff',
+              20, '#f1f5f9',
+              30, '#e2e8f0',
+              45, '#cbd5e1'
             ],
             'fill-extrusion-height': [
               'interpolate', ['linear'], ['zoom'],
@@ -248,7 +242,7 @@ export function getMapHtmlContent(): string {
               14.5, ['get', 'height']
             ],
             'fill-extrusion-base': 0,
-            'fill-extrusion-opacity': 0.88
+            'fill-extrusion-opacity': 0.85
           }
         }
       ]
@@ -374,8 +368,8 @@ export function getMapHtmlContent(): string {
       try {
         map.setLight({
           anchor: 'viewport',
-          color: '#cbd5e1',
-          intensity: 0.5,
+          color: '#ffffff',
+          intensity: 0.65,
           position: [1.15, 210, 30]
         });
       } catch(e) {}
