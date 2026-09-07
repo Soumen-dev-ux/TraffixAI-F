@@ -256,6 +256,7 @@ export default function CityMap({
             'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
           ],
           tileSize: 256,
+          maxzoom: 18,
           attribution: '&copy; Esri, DeLorme, NAVTEQ, TomTom &mdash; MapLibre'
         }
       },
@@ -264,7 +265,7 @@ export default function CityMap({
         type: 'raster',
         source: 'esri-tiles',
         minzoom: 0,
-        maxzoom: 19
+        maxzoom: 22
       }]
     };
 
@@ -273,6 +274,8 @@ export default function CityMap({
       style: mapStyle,
       center: [88.3639, 22.5726], // [lng, lat]
       zoom: 13,
+      minZoom: 9,
+      maxZoom: 18.5,
       pitch: 35, // 3D perspective tilt
       bearing: 0,
     });
