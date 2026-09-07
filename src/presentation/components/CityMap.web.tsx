@@ -250,20 +250,22 @@ export default function CityMap({
     var mapStyle = {
       version: 8,
       sources: {
-        'esri-tiles': {
+        'osm-tiles': {
           type: 'raster',
           tiles: [
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
           ],
           tileSize: 256,
-          maxzoom: 18,
-          attribution: '&copy; Esri, DeLorme, NAVTEQ, TomTom &mdash; MapLibre'
+          maxzoom: 19,
+          attribution: '&copy; OpenStreetMap contributors &mdash; MapLibre'
         }
       },
       layers: [{
-        id: 'esri-tiles-layer',
+        id: 'osm-tiles-layer',
         type: 'raster',
-        source: 'esri-tiles',
+        source: 'osm-tiles',
         minzoom: 0,
         maxzoom: 22
       }]
@@ -275,7 +277,7 @@ export default function CityMap({
       center: [88.3639, 22.5726], // [lng, lat]
       zoom: 13,
       minZoom: 9,
-      maxZoom: 18.5,
+      maxZoom: 19,
       pitch: 35, // 3D perspective tilt
       bearing: 0,
     });
