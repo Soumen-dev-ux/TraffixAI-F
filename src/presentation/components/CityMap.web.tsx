@@ -55,6 +55,9 @@ export default function CityMap({
           onCameraPressRef.current(found);
         }
       }
+      if (event.data?.type === "MAP_READY") {
+        updateMapData();
+      }
     };
 
     window.addEventListener("message", handleMessage);
@@ -222,7 +225,28 @@ export default function CityMap({
       }]
     };
 
-    var mapStyle = 'https://tiles.openfreemap.org/styles/liberty';
+    var mapStyle = {
+      version: 8,
+      sources: {
+        'carto-tiles': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }
+      },
+      layers: [{
+        id: 'carto-tiles-layer',
+        type: 'raster',
+        source: 'carto-tiles',
+        minzoom: 0,
+        maxzoom: 20
+      }]
+    };
 
     var map = new maplibregl.Map({
       container: 'map',
@@ -456,6 +480,15 @@ export default function CityMap({
             pitch: 40,
             duration: 1500
           });
+        }
+      }
+
+      // 5. Auto-fit cameras on initial view
+      if (!vehicle && (!trajectory || !trajectory.detections || trajectory.detections.length === 0)) {
+        if (cameras.length > 1) {
+          var camBounds = new maplibregl.LngLatBounds();
+          cameras.forEach(function(c) { camBounds.extend([c.longitude, c.latitude]); });
+          map.fitBounds(camBounds, { padding: 80, pitch: 25, duration: 800 });
         }
       }
     }
