@@ -1,4 +1,7 @@
+import { kolkataBuildings } from "../../data/kolkataBuildings";
+
 export function getMapHtmlContent(): string {
+  const buildingsJson = JSON.stringify(kolkataBuildings);
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -154,22 +157,9 @@ export function getMapHtmlContent(): string {
       }
     }
 
-    var cartoKey = 'eyJhbGciOiJIUzI1NiJ9.eyJhIjoiYWNfcjA0Ym05MDAiLCJqdGkiOiIwMDFjNmE4MSJ9.cjTgX0mrJd1HJNxRye21vvxzHTqVCKDR2kmqyVTWh0w';
     var mapStyle = {
       version: 8,
       sources: {
-        'carto-voyager': {
-          type: 'raster',
-          tiles: [
-            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
-            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
-            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
-            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey
-          ],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        },
         'osm-tiles': {
           type: 'raster',
           tiles: [
@@ -180,15 +170,43 @@ export function getMapHtmlContent(): string {
           tileSize: 256,
           maxzoom: 19,
           attribution: '&copy; OpenStreetMap contributors &mdash; MapLibre'
+        },
+        'kolkata-buildings': {
+          type: 'geojson',
+          data: ${buildingsJson}
         }
       },
-      layers: [{
-        id: 'carto-voyager-layer',
-        type: 'raster',
-        source: 'carto-voyager',
-        minzoom: 0,
-        maxzoom: 22
-      }]
+      layers: [
+        {
+          id: 'osm-tiles-layer',
+          type: 'raster',
+          source: 'osm-tiles',
+          minzoom: 0,
+          maxzoom: 22
+        },
+        {
+          id: '3d-buildings-layer',
+          type: 'fill-extrusion',
+          source: 'kolkata-buildings',
+          minzoom: 13,
+          paint: {
+            'fill-extrusion-color': [
+              'interpolate', ['linear'], ['get', 'height'],
+              12, '#f8fafc',
+              20, '#e2e8f0',
+              30, '#cbd5e1',
+              45, '#94a3b8'
+            ],
+            'fill-extrusion-height': [
+              'interpolate', ['linear'], ['zoom'],
+              13, 0,
+              14.5, ['get', 'height']
+            ],
+            'fill-extrusion-base': 0,
+            'fill-extrusion-opacity': 0.88
+          }
+        }
+      ]
     };
 
     // Initialize map with enhanced 3D perspective pitch and angled bearing
@@ -320,27 +338,20 @@ export function getMapHtmlContent(): string {
 
     map.on('load', function() {
       isMapReady = true;
+      try {
+        map.setLight({
+          anchor: 'viewport',
+          color: '#ffffff',
+          intensity: 0.6,
+          position: [1.15, 210, 30]
+        });
+      } catch(e) {}
       initLayers();
       if (pendingData) {
         updateMap(pendingData);
         pendingData = null;
       }
       postToHost({ type: 'MAP_READY' });
-    });
-
-    map.on('error', function(e) {
-      if (e && e.sourceId === 'carto-voyager' && !map.getLayer('osm-tiles-layer')) {
-        console.warn('CARTO Voyager tile issue, enabling OSM fallback', e);
-        try {
-          map.addLayer({
-            id: 'osm-tiles-layer',
-            type: 'raster',
-            source: 'osm-tiles',
-            minzoom: 0,
-            maxzoom: 22
-          }, 'carto-voyager-layer');
-        } catch(err) {}
-      }
     });
 
     function updateMap(data) {
@@ -357,9 +368,12 @@ export function getMapHtmlContent(): string {
       var heatmapPoints = data.heatmapPoints || [];
       var is3D = data.is3DView !== undefined ? data.is3DView : true;
 
-      // Smooth camera perspective pitch transition
+      // Smooth camera perspective pitch transition & building visibility toggle
       if (is3D !== is3DCurrent) {
         is3DCurrent = is3D;
+        if (map.getLayer('3d-buildings-layer')) {
+          map.setLayoutProperty('3d-buildings-layer', 'visibility', is3D ? 'visible' : 'none');
+        }
         if (is3D) {
           map.easeTo({ pitch: 50, bearing: -18, duration: 800 });
         } else {
