@@ -461,11 +461,11 @@ Ideal for Command & Control Center monitoring on large screens.
 
 Designed for traffic junction booths and edge control stations running offline or on local LAN.
 
-### Option A: Development Mode (Auto-starts Expo Web + Launches Native Window)
+### Option A: Development Mode (Universal: Mobile QR in Terminal + Native Desktop Window)
 ```bash
 npm run electron
 ```
-*What this does:* Concurrently boots Metro on port 8081, waits until the server is ready, and immediately opens the native desktop app window ($1400 \times 900$).
+*What this does:* Concurrently boots Metro on port 8081, prints the **mobile QR code** directly in your terminal (for scanning with Expo Go on your phone), and automatically opens the native Electron desktop dashboard window ($1400 \times 900$).
 
 ### Option B: Launch Desktop Window Only (If Web Server is Already Running)
 If you already started `npm run web` in another terminal tab:

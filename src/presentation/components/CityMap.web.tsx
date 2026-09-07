@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
     // Linear gradient simulation for web / react-native-web
     // @ts-ignore
-    background: "linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #f59e0b, #ef4444)",
+    backgroundImage: "linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #f59e0b, #ef4444)",
     backgroundColor: "#f59e0b",
   },
 });
