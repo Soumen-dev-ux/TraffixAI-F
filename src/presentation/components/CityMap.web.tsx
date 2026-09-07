@@ -1,10 +1,10 @@
-import { getMapHtmlContent } from "./mapHtmlContent";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { getTrafficHeatmapPoints } from "../../data/api/mockHeatmapData";
 import { Camera } from "../../domain/models/Camera";
 import { Vehicle } from "../../domain/models/Vehicle";
 import { VehicleTrajectory } from "../../domain/models/VehicleTrajectory";
+import { getMapHtmlContent } from "./mapHtmlContent";
 
 type Props = {
   cameras: Camera[];
@@ -39,6 +39,8 @@ export default function CityMap({
   onCameraPress,
 }: Props) {
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [is3DView, setIs3DView] = useState(true);
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const camerasRef = useRef(cameras);
   camerasRef.current = cameras;
@@ -48,6 +50,8 @@ export default function CityMap({
   trajectoryRef.current = trajectory;
   const showHeatmapRef = useRef(showHeatmap);
   showHeatmapRef.current = showHeatmap;
+  const is3DViewRef = useRef(is3DView);
+  is3DViewRef.current = is3DView;
   const onCameraPressRef = useRef(onCameraPress);
   onCameraPressRef.current = onCameraPress;
 
@@ -62,6 +66,7 @@ export default function CityMap({
           vehicle: vehicleRef.current,
           trajectory: trajectoryRef.current,
           showHeatmap: showHeatmapRef.current,
+          is3DView: is3DViewRef.current,
           heatmapPoints,
         },
         "*"
@@ -91,7 +96,7 @@ export default function CityMap({
 
   useEffect(() => {
     sendMapUpdate();
-  }, [cameras, vehicle, trajectory, showHeatmap]);
+  }, [cameras, vehicle, trajectory, showHeatmap, is3DView]);
 
   const htmlContent = React.useMemo(() => getMapHtmlContent(), []);
 
@@ -109,25 +114,48 @@ export default function CityMap({
         onLoad: sendMapUpdate,
       })}
 
-      {/* Heatmap Layer Toggle Control */}
-      <TouchableOpacity
-        style={[
-          styles.heatmapToggle,
-          showHeatmap ? styles.heatmapToggleActive : styles.heatmapToggleInactive,
-        ]}
-        onPress={() => setShowHeatmap(!showHeatmap)}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.heatmapToggleEmoji}>🔥</Text>
-        <Text
+      {/* Top Map Action Buttons */}
+      <View style={styles.topControls}>
+        {/* 3D Perspective View Toggle */}
+        <TouchableOpacity
           style={[
-            styles.heatmapToggleText,
-            showHeatmap ? styles.textActive : styles.textInactive,
+            styles.toggleBtn,
+            is3DView ? styles.toggleBtn3DActive : styles.toggleBtnInactive,
           ]}
+          onPress={() => setIs3DView(!is3DView)}
+          activeOpacity={0.8}
         >
-          {showHeatmap ? "Heatmap On" : "Heatmap Off"}
-        </Text>
-      </TouchableOpacity>
+          <Text style={styles.toggleEmoji}>📐</Text>
+          <Text
+            style={[
+              styles.toggleText,
+              is3DView ? styles.text3DActive : styles.textInactive,
+            ]}
+          >
+            {is3DView ? "3D Perspective" : "2D Flat View"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Heatmap Toggle */}
+        <TouchableOpacity
+          style={[
+            styles.toggleBtn,
+            showHeatmap ? styles.toggleBtnHeatActive : styles.toggleBtnInactive,
+          ]}
+          onPress={() => setShowHeatmap(!showHeatmap)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.toggleEmoji}>🔥</Text>
+          <Text
+            style={[
+              styles.toggleText,
+              showHeatmap ? styles.textHeatActive : styles.textInactive,
+            ]}
+          >
+            {showHeatmap ? "Heatmap On" : "Heatmap Off"}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Map Legend */}
       <View style={styles.legend}>
@@ -172,14 +200,20 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
   },
-  heatmapToggle: {
+  topControls: {
     position: "absolute",
     top: 15,
     right: 15,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    gap: 8,
+    zIndex: 10,
+  },
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 20,
     elevation: 6,
     shadowColor: "#000",
@@ -189,31 +223,38 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    zIndex: 10,
   },
-  heatmapToggleActive: {
+  toggleBtn3DActive: {
     backgroundColor: "#1e293b",
-    borderWidth: 1,
+    borderWidth: 1.5,
+    borderColor: "#38bdf8",
+  },
+  toggleBtnHeatActive: {
+    backgroundColor: "#1e293b",
+    borderWidth: 1.5,
     borderColor: "#f59e0b",
   },
-  heatmapToggleInactive: {
+  toggleBtnInactive: {
     backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#cbd5e1",
   },
-  heatmapToggleEmoji: {
-    fontSize: 16,
-    marginRight: 6,
+  toggleEmoji: {
+    fontSize: 14,
+    marginRight: 5,
   },
-  heatmapToggleText: {
-    fontSize: 13,
+  toggleText: {
+    fontSize: 12,
     fontWeight: "700",
   },
-  textActive: {
+  text3DActive: {
+    color: "#38bdf8",
+  },
+  textHeatActive: {
     color: "#f59e0b",
   },
   textInactive: {
-    color: "#64748b",
+    color: "#475569",
   },
   legend: {
     position: "absolute",
@@ -273,7 +314,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginHorizontal: 5,
-    // Linear gradient simulation for web / react-native-web
     // @ts-ignore
     backgroundImage: "linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #f59e0b, #ef4444)",
     backgroundColor: "#f59e0b",

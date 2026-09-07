@@ -23,7 +23,7 @@ export function getMapHtmlContent(): string {
       border-radius: 50%;
       width: 36px;
       height: 36px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.45);
       font-size: 18px;
       cursor: pointer;
       display: flex;
@@ -33,8 +33,8 @@ export function getMapHtmlContent(): string {
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
     }
     .camera-marker:hover, .camera-marker:active {
-      transform: scale(1.25) translateY(-2px);
-      box-shadow: 0 8px 18px rgba(2, 132, 199, 0.45);
+      transform: scale(1.25) translateY(-4px);
+      box-shadow: 0 12px 24px rgba(2, 132, 199, 0.55);
       z-index: 50;
     }
     .camera-label {
@@ -42,16 +42,17 @@ export function getMapHtmlContent(): string {
       bottom: -20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.95);
       color: #38bdf8;
       font-size: 10px;
       font-weight: 700;
-      padding: 1px 6px;
+      padding: 2px 7px;
       border-radius: 4px;
       white-space: nowrap;
       pointer-events: none;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      letter-spacing: 0.3px;
     }
     .vehicle-marker {
       position: relative;
@@ -61,26 +62,26 @@ export function getMapHtmlContent(): string {
       cursor: pointer;
     }
     .vehicle-emoji {
-      font-size: 28px;
-      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+      font-size: 30px;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
       animation: bounce 2s infinite ease-in-out;
     }
     @keyframes bounce {
       0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
+      50% { transform: translateY(-5px); }
     }
     .vehicle-plate-pill {
       position: absolute;
-      bottom: -18px;
-      background: #1e293b;
-      color: #f8fafc;
+      bottom: -20px;
+      background: #0f172a;
+      color: #38bdf8;
       font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
+      font-weight: 800;
+      padding: 2px 7px;
       border-radius: 4px;
-      border: 1px solid #3b82f6;
+      border: 1px solid #0284c7;
       white-space: nowrap;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
       pointer-events: none;
     }
     .detection-marker {
@@ -95,7 +96,7 @@ export function getMapHtmlContent(): string {
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
       cursor: pointer;
     }
     .detection-marker.latest {
@@ -105,7 +106,7 @@ export function getMapHtmlContent(): string {
       background: #dc2626;
       border-color: #ffffff;
       color: #ffffff;
-      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35), 0 4px 12px rgba(0,0,0,0.4);
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35), 0 6px 16px rgba(0,0,0,0.45);
       animation: pulseAlert 1.5s infinite;
     }
     @keyframes pulseAlert {
@@ -177,6 +178,7 @@ export function getMapHtmlContent(): string {
       }]
     };
 
+    // Initialize map with enhanced 3D perspective pitch and angled bearing
     var map = new maplibregl.Map({
       container: 'map',
       style: mapStyle,
@@ -184,8 +186,8 @@ export function getMapHtmlContent(): string {
       zoom: 13,
       minZoom: 2,
       maxZoom: 19,
-      pitch: 35,
-      bearing: 0,
+      pitch: 50, // Enhanced 3D camera angle
+      bearing: -18, // Angled street perspective
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
@@ -195,6 +197,7 @@ export function getMapHtmlContent(): string {
     var cameraMarkers = [];
     var trajectoryMarkers = [];
     var vehicleMarker = null;
+    var is3DCurrent = true;
 
     function getVehicleEmoji(type) {
       switch (type) {
@@ -209,6 +212,7 @@ export function getMapHtmlContent(): string {
     }
 
     function initLayers() {
+      // 1. WebGL Traffic Density Heatmap
       if (!map.getSource('traffic-heat-source')) {
         map.addSource('traffic-heat-source', {
           type: 'geojson',
@@ -237,32 +241,65 @@ export function getMapHtmlContent(): string {
         });
       }
 
+      // 2. Elevated 3D Trajectory Ribbon (Multi-Layer Depth)
       if (!map.getSource('trajectory-source')) {
         map.addSource('trajectory-source', {
           type: 'geojson',
           data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
         });
+
+        // Layer A: Ground Drop-Shadow (provides floating 3D elevation illusion)
+        map.addLayer({
+          id: 'trajectory-shadow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#020617',
+            'line-width': 12,
+            'line-opacity': 0.38,
+            'line-blur': 6,
+            'line-offset': 4
+          }
+        });
+
+        // Layer B: Outer Neon Cyan Glow Bloom
         map.addLayer({
           id: 'trajectory-glow-layer',
           type: 'line',
           source: 'trajectory-source',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#60a5fa',
+            'line-color': '#38bdf8',
             'line-width': 10,
-            'line-opacity': 0.45,
+            'line-opacity': 0.55,
             'line-blur': 4
           }
         });
+
+        // Layer C: Vibrant Blue Core Route
         map.addLayer({
           id: 'trajectory-line-layer',
           type: 'line',
           source: 'trajectory-source',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#2563eb',
+            'line-color': '#0284c7',
             'line-width': 5,
-            'line-opacity': 0.95
+            'line-opacity': 1.0
+          }
+        });
+
+        // Layer D: Sharp Center Laser Highlight
+        map.addLayer({
+          id: 'trajectory-highlight-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1.5,
+            'line-opacity': 0.85
           }
         });
       }
@@ -290,6 +327,17 @@ export function getMapHtmlContent(): string {
       var trajectory = data.trajectory;
       var showHeatmap = data.showHeatmap;
       var heatmapPoints = data.heatmapPoints || [];
+      var is3D = data.is3DView !== undefined ? data.is3DView : true;
+
+      // Smooth camera perspective pitch transition
+      if (is3D !== is3DCurrent) {
+        is3DCurrent = is3D;
+        if (is3D) {
+          map.easeTo({ pitch: 50, bearing: -18, duration: 800 });
+        } else {
+          map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+        }
+      }
 
       // 1. Update Heatmap Layer
       if (map.getLayer('traffic-heat-layer')) {
@@ -316,14 +364,14 @@ export function getMapHtmlContent(): string {
         var el = document.createElement('div');
         el.className = 'camera-marker';
         el.title = camera.name || camera.id;
-        el.innerHTML = '📹<span class="camera-label">' + (camera.name || camera.id) + '</span>';
+        el.innerHTML = '📹<span class=\"camera-label\">' + (camera.name || camera.id) + '</span>';
         el.addEventListener('click', function(ev) {
           ev.stopPropagation();
           postToHost({ type: 'CAMERA_CLICK', cameraId: camera.id });
         });
 
         var popup = new maplibregl.Popup({ offset: 20 })
-          .setHTML('<strong style="font-size:13px; color:#38bdf8;">' + (camera.name || camera.id) + '</strong><br/><span style="color:#94a3b8;">Status: ' + (camera.status || 'Active') + '</span>');
+          .setHTML('<strong style=\"font-size:13px; color:#0284c7;\">' + (camera.name || camera.id) + '</strong><br/><span style=\"color:#94a3b8;\">Status: ' + (camera.status || 'Active') + '</span>');
 
         var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
           .setLngLat([camera.longitude, camera.latitude])
@@ -350,7 +398,7 @@ export function getMapHtmlContent(): string {
           el.innerHTML = String(index + 1);
 
           var popup = new maplibregl.Popup({ offset: 18 })
-            .setHTML('<strong>Point #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
+            .setHTML('<strong>Point #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style=\"color:#94a3b8;\">' + (detection.detectedAt || '') + '</span>');
 
           var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
             .setLngLat([detection.longitude, detection.latitude])
@@ -363,7 +411,7 @@ export function getMapHtmlContent(): string {
         if (lineCoords.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
           lineCoords.forEach(function(c) { bounds.extend(c); });
-          map.fitBounds(bounds, { padding: 60, pitch: 35, duration: 1200 });
+          map.fitBounds(bounds, { padding: 60, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
         }
       }
 
@@ -386,10 +434,10 @@ export function getMapHtmlContent(): string {
         var vel = document.createElement('div');
         vel.className = 'vehicle-marker';
         var emoji = getVehicleEmoji(vehicle.vehicleType);
-        vel.innerHTML = '<span class="vehicle-emoji">' + emoji + '</span><span class="vehicle-plate-pill">' + (vehicle.plateNumber || '') + '</span>';
+        vel.innerHTML = '<span class=\"vehicle-emoji\">' + emoji + '</span><span class=\"vehicle-plate-pill\">' + (vehicle.plateNumber || '') + '</span>';
 
         var vpopup = new maplibregl.Popup({ offset: 24 })
-          .setHTML('<strong>' + vehicle.plateNumber + '</strong><br/>' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '<br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
+          .setHTML('<strong>' + vehicle.plateNumber + '</strong><br/>' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '<br/><span style=\"color:#94a3b8;\">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
 
         vehicleMarker = new maplibregl.Marker({ element: vel, anchor: 'center' })
           .setLngLat([vehicle.longitude, vehicle.latitude])
@@ -399,19 +447,20 @@ export function getMapHtmlContent(): string {
         if (!trajectory || !trajectory.detections || trajectory.detections.length <= 1) {
           map.flyTo({
             center: [vehicle.longitude, vehicle.latitude],
-            zoom: 15,
-            pitch: 40,
+            zoom: 15.5,
+            pitch: is3DCurrent ? 52 : 0,
+            bearing: is3DCurrent ? -18 : 0,
             duration: 1500
           });
         }
       }
 
-      // 5. Auto-fit cameras on initial view if no vehicle/trajectory
+      // 5. Auto-fit cameras on initial view
       if (!vehicle && (!trajectory || !trajectory.detections || trajectory.detections.length === 0)) {
         if (cameras.length > 1) {
           var camBounds = new maplibregl.LngLatBounds();
           cameras.forEach(function(c) { camBounds.extend([c.longitude, c.latitude]); });
-          map.fitBounds(camBounds, { padding: 80, pitch: 25, duration: 800 });
+          map.fitBounds(camBounds, { padding: 80, pitch: is3DCurrent ? 46 : 0, bearing: is3DCurrent ? -18 : 0, duration: 800 });
         }
       }
     }
