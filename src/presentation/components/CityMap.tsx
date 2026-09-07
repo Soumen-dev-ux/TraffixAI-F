@@ -40,7 +40,6 @@ export default function CityMap({
   onCameraPress,
 }: Props) {
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [show3D, setShow3D] = useState(true);
   const webViewRef = useRef<WebView>(null);
 
   const camerasRef = useRef(cameras);
@@ -51,8 +50,6 @@ export default function CityMap({
   trajectoryRef.current = trajectory;
   const showHeatmapRef = useRef(showHeatmap);
   showHeatmapRef.current = showHeatmap;
-  const show3DRef = useRef(show3D);
-  show3DRef.current = show3D;
   const onCameraPressRef = useRef(onCameraPress);
   onCameraPressRef.current = onCameraPress;
 
@@ -68,7 +65,6 @@ export default function CityMap({
       vehicle: vehicleRef.current,
       trajectory: trajectoryRef.current,
       showHeatmap: showHeatmapRef.current,
-      show3D: show3DRef.current,
       heatmapPoints,
     };
 
@@ -103,7 +99,7 @@ export default function CityMap({
 
   useEffect(() => {
     sendMapUpdate();
-  }, [cameras, vehicle, trajectory, showHeatmap, show3D]);
+  }, [cameras, vehicle, trajectory, showHeatmap]);
 
   return (
     <View style={styles.container}>
@@ -124,48 +120,25 @@ export default function CityMap({
         style={styles.webView}
       />
 
-      {/* Top Map Action Buttons */}
-      <View style={styles.topControls}>
-        {/* 3D Buildings Toggle */}
-        <TouchableOpacity
+      {/* Heatmap Layer Toggle Control */}
+      <TouchableOpacity
+        style={[
+          styles.heatmapToggle,
+          showHeatmap ? styles.heatmapToggleActive : styles.heatmapToggleInactive,
+        ]}
+        onPress={() => setShowHeatmap(!showHeatmap)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.heatmapToggleEmoji}>🔥</Text>
+        <Text
           style={[
-            styles.toggleBtn,
-            show3D ? styles.toggleBtn3DActive : styles.toggleBtnInactive,
+            styles.heatmapToggleText,
+            showHeatmap ? styles.textActive : styles.textInactive,
           ]}
-          onPress={() => setShow3D(!show3D)}
-          activeOpacity={0.8}
         >
-          <Text style={styles.toggleEmoji}>🏢</Text>
-          <Text
-            style={[
-              styles.toggleText,
-              show3D ? styles.text3DActive : styles.textInactive,
-            ]}
-          >
-            {show3D ? "3D Buildings On" : "3D Off"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Heatmap Toggle */}
-        <TouchableOpacity
-          style={[
-            styles.toggleBtn,
-            showHeatmap ? styles.toggleBtnHeatActive : styles.toggleBtnInactive,
-          ]}
-          onPress={() => setShowHeatmap(!showHeatmap)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.toggleEmoji}>🔥</Text>
-          <Text
-            style={[
-              styles.toggleText,
-              showHeatmap ? styles.textHeatActive : styles.textInactive,
-            ]}
-          >
-            {showHeatmap ? "Heatmap On" : "Heatmap Off"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {showHeatmap ? "Heatmap On" : "Heatmap Off"}
+        </Text>
+      </TouchableOpacity>
 
       {/* Map Legend */}
       <View style={styles.legend}>
@@ -214,67 +187,54 @@ const styles = StyleSheet.create({
     minHeight: 400,
     borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "#0b0f19",
+    backgroundColor: "#0f172a",
   },
   webView: {
     flex: 1,
-    backgroundColor: "#0b0f19",
+    backgroundColor: "#0f172a",
   },
-  topControls: {
+  heatmapToggle: {
     position: "absolute",
     top: 15,
     right: 15,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    zIndex: 10,
-  },
-  toggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     elevation: 6,
     shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
     shadowOffset: {
       width: 0,
       height: 2,
     },
+    zIndex: 10,
   },
-  toggleBtn3DActive: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1.5,
-    borderColor: "#38bdf8",
-  },
-  toggleBtnHeatActive: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1.5,
-    borderColor: "#f59e0b",
-  },
-  toggleBtnInactive: {
+  heatmapToggleActive: {
     backgroundColor: "#1e293b",
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: "#f59e0b",
   },
-  toggleEmoji: {
-    fontSize: 14,
-    marginRight: 5,
+  heatmapToggleInactive: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
-  toggleText: {
-    fontSize: 12,
+  heatmapToggleEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  heatmapToggleText: {
+    fontSize: 13,
     fontWeight: "700",
   },
-  text3DActive: {
-    color: "#38bdf8",
-  },
-  textHeatActive: {
+  textActive: {
     color: "#f59e0b",
   },
   textInactive: {
-    color: "#94a3b8",
+    color: "#64748b",
   },
   legend: {
     position: "absolute",
@@ -283,20 +243,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    backgroundColor: "rgba(15, 23, 42, 0.92)",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     elevation: 5,
     shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
     zIndex: 10,
   },
   legendItem: {
@@ -305,31 +263,31 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   legendEmoji: {
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 4,
   },
   legendText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#e2e8f0",
+    color: "#333333",
   },
   routeIndicator: {
     width: 20,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#0284c7",
+    backgroundColor: "#2563eb",
     marginRight: 5,
   },
   heatmapLegendItem: {
     borderLeftWidth: 1,
-    borderLeftColor: "#334155",
+    borderLeftColor: "#cbd5e1",
     paddingLeft: 10,
     marginRight: 0,
   },
   densityLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#94a3b8",
+    color: "#64748b",
   },
   heatDotContainer: {
     flexDirection: "row",
