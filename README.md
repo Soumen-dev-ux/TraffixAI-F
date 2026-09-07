@@ -384,89 +384,115 @@ The following can be integrated as the MVP progresses:
 
 ---
 
-# 🚀 Getting Started
+# 🚀 Getting Started & Running Methods
 
-## Prerequisites
-
-Make sure you have:
-
-* Node.js
-* npm
-* Expo CLI / Expo tooling
-* Android Studio or an Android device
-* Expo Go for mobile testing
+TraffixAI is a **Universal 3-in-1 Platform** (Mobile App + Web Dashboard + Desktop Edge App) running from a single unified codebase.
 
 ---
 
-## 1. Clone the Repository
+## 📋 Prerequisites
 
-```bash
-git clone https://github.com/Soumen-dev-ux/TraffixAI-F
-```
-
-Navigate into the project:
-
-```bash
-cd TraffixAI
-```
+Before running the application, make sure you have:
+* **Node.js**: v18.0.0 or higher (v20+ recommended)
+* **npm**: v9.0.0 or higher
+* **Mobile Testing**: **Expo Go** app installed from Google Play Store or Apple App Store (compatible with **Expo SDK 57**)
+* **Desktop Testing**: Electron v44+ (installed via dev dependencies)
 
 ---
 
-## 2. Install Dependencies
+## 📥 1. Installation & Setup
 
-```bash
-npm install
-```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Soumen-dev-ux/TraffixAI-F
+   cd TraffixAI-F
+   ```
 
----
+2. **Install all dependencies:**
+   ```bash
+   npm install
+   ```
 
-## 3. Start the Development Server
-
-```bash
-npx expo start
-```
-
-You can then open the application using:
-
-* Expo Go
-* Android Emulator
-* iOS Simulator
-* Web browser
+3. **Verify project health (Optional but recommended):**
+   ```bash
+   npx expo-doctor
+   ```
+   *(All 21 health checks should pass).*
 
 ---
 
-# 📱 Running on Android
+## 📱 2. Running on Mobile (Android & iOS via Expo Go)
 
-Start Expo:
+1. **Start the Expo server:**
+   ```bash
+   npx expo start
+   ```
+   *Tip: If you recently upgraded packages, use `npx expo start -c` to start with a clean cache.*
 
-```bash
-npx expo start
-```
+2. **Open the App:**
+   * **Physical Android / iPhone**: Open the **Expo Go** app on your phone and scan the QR code displayed in your terminal.
+   * **Android Emulator**: Press `a` in your terminal to automatically launch on a running Android Virtual Device (AVD).
+   * **iOS Simulator (macOS)**: Press `i` in your terminal to open inside Xcode iOS Simulator.
 
-Then either:
+---
 
-* Scan the QR code using Expo Go
-* Press `a` to open Android Emulator
+## 🌐 3. Running as Web Application (Browser Dashboard)
+
+Ideal for Command & Control Center monitoring on large screens.
+
+1. **Start the Web server directly:**
+   ```bash
+   npm run web
+   ```
+   *(Alternatively, if `npx expo start` is already running in your terminal, simply press `w` on your keyboard).*
+
+2. **Access in Browser:**
+   Open [http://localhost:8081](http://localhost:8081) in Chrome, Edge, Firefox, or Brave.
+
+3. **Export Static Web Production Bundle:**
+   ```bash
+   npx expo export --platform web
+   ```
+   *Outputs optimized production assets into the `dist/` directory.*
 
 ---
 
-# 🌐 Running on Web
+## 💻 4. Running as Desktop Application (Electron)
 
-Start the development server:
+Designed for traffic junction booths and edge control stations running offline or on local LAN.
 
+### Option A: Development Mode (Auto-starts Expo Web + Launches Native Window)
 ```bash
-npx expo start --web
+npm run electron
+```
+*What this does:* Concurrently boots Metro on port 8081, waits until the server is ready, and immediately opens the native desktop app window ($1400 \times 900$).
+
+### Option B: Launch Desktop Window Only (If Web Server is Already Running)
+If you already started `npm run web` in another terminal tab:
+```bash
+npm run electron:window
 ```
 
-The project contains a dedicated web map component:
-
-```text
-src/presentation/components/CityMap.web.tsx
+### Option C: Offline Standalone Desktop Mode (Production Build)
+To test how the application runs standalone without any live development server:
+```bash
+npm run electron:prod
 ```
-
-This allows the map implementation to be handled separately for web compatibility.
+*What this does:* Automatically compiles static web bundles into `dist/` and loads them directly into the Electron desktop environment with zero internet dependency.
 
 ---
+
+## 🛠️ Troubleshooting & Quick Tips
+
+| Issue | Cause | Solution |
+|---|---|---|
+| **Expo Go SDK Mismatch** | Phone has newer/older Expo Go | Ensure project dependencies match phone Expo Go version (`npx expo-doctor`). |
+| **Port 8081 Already in Use** | Another process is holding port 8081 | Run `lsof -ti:8081 \| xargs kill -9` (Linux/Mac) or restart terminal. |
+| **Blank Map on Web** | Leaflet/Web map bundle cache | Hard refresh in browser (`Ctrl + Shift + R`) or run with `npm run web -- -c`. |
+| **Missing Module Errors** | `node_modules` out of sync | Run `rm -rf node_modules package-lock.json && npm install`. |
+
+---
+
 
 # 🧪 Current MVP Data
 
