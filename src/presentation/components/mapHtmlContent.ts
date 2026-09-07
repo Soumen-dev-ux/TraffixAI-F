@@ -154,9 +154,22 @@ export function getMapHtmlContent(): string {
       }
     }
 
+    var cartoKey = 'eyJhbGciOiJIUzI1NiJ9.eyJhIjoiYWNfcjA0Ym05MDAiLCJqdGkiOiIwMDFjNmE4MSJ9.cjTgX0mrJd1HJNxRye21vvxzHTqVCKDR2kmqyVTWh0w';
     var mapStyle = {
       version: 8,
       sources: {
+        'carto-voyager': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey,
+            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=' + cartoKey
+          ],
+          tileSize: 256,
+          maxzoom: 19,
+          attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        },
         'osm-tiles': {
           type: 'raster',
           tiles: [
@@ -170,9 +183,9 @@ export function getMapHtmlContent(): string {
         }
       },
       layers: [{
-        id: 'osm-tiles-layer',
+        id: 'carto-voyager-layer',
         type: 'raster',
-        source: 'osm-tiles',
+        source: 'carto-voyager',
         minzoom: 0,
         maxzoom: 22
       }]
@@ -313,6 +326,21 @@ export function getMapHtmlContent(): string {
         pendingData = null;
       }
       postToHost({ type: 'MAP_READY' });
+    });
+
+    map.on('error', function(e) {
+      if (e && e.sourceId === 'carto-voyager' && !map.getLayer('osm-tiles-layer')) {
+        console.warn('CARTO Voyager tile issue, enabling OSM fallback', e);
+        try {
+          map.addLayer({
+            id: 'osm-tiles-layer',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 22
+          }, 'carto-voyager-layer');
+        } catch(err) {}
+      }
     });
 
     function updateMap(data) {
