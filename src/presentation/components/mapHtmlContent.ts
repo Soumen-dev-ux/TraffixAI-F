@@ -4,7 +4,7 @@ export function getMapHtmlContent(): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>MapLibre Traffic Map</title>
+  <title>MapLibre 3D Tactical Traffic Map</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
@@ -12,18 +12,18 @@ export function getMapHtmlContent(): string {
     html, body, #map {
       width: 100%;
       height: 100%;
-      background: #0f172a;
+      background: #0b0f19;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
     .camera-marker {
-      background: #ffffff;
-      border: 2px solid #0284c7;
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid #38bdf8;
       border-radius: 50%;
       width: 36px;
       height: 36px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
       font-size: 18px;
       cursor: pointer;
       display: flex;
@@ -33,25 +33,27 @@ export function getMapHtmlContent(): string {
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
     }
     .camera-marker:hover, .camera-marker:active {
-      transform: scale(1.25) translateY(-2px);
-      box-shadow: 0 8px 18px rgba(2, 132, 199, 0.45);
+      transform: scale(1.25) translateY(-3px);
+      box-shadow: 0 0 22px rgba(56, 189, 248, 0.85);
       z-index: 50;
     }
     .camera-label {
       position: absolute;
-      bottom: -20px;
+      bottom: -22px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(11, 15, 25, 0.95);
       color: #38bdf8;
       font-size: 10px;
       font-weight: 700;
-      padding: 1px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      padding: 2px 7px;
       border-radius: 4px;
       white-space: nowrap;
       pointer-events: none;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      letter-spacing: 0.4px;
     }
     .vehicle-marker {
       position: relative;
@@ -61,41 +63,43 @@ export function getMapHtmlContent(): string {
       cursor: pointer;
     }
     .vehicle-emoji {
-      font-size: 28px;
-      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
-      animation: bounce 2s infinite ease-in-out;
+      font-size: 30px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+      animation: vehiclePulse 2s infinite ease-in-out;
     }
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
+    @keyframes vehiclePulse {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-4px) scale(1.08); }
     }
     .vehicle-plate-pill {
       position: absolute;
-      bottom: -18px;
-      background: #1e293b;
-      color: #f8fafc;
+      bottom: -20px;
+      background: #0f172a;
+      color: #38bdf8;
       font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      padding: 2px 8px;
       border-radius: 4px;
-      border: 1px solid #3b82f6;
+      border: 1px solid #0284c7;
       white-space: nowrap;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
       pointer-events: none;
     }
     .detection-marker {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #ffffff;
-      border: 2px solid #2563eb;
-      color: #1e40af;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #38bdf8;
+      color: #38bdf8;
       font-size: 11px;
       font-weight: 800;
+      font-family: ui-monospace, monospace;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
       cursor: pointer;
     }
     .detection-marker.latest {
@@ -105,22 +109,22 @@ export function getMapHtmlContent(): string {
       background: #dc2626;
       border-color: #ffffff;
       color: #ffffff;
-      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35), 0 4px 12px rgba(0,0,0,0.4);
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.4), 0 0 18px rgba(220, 38, 38, 0.8);
       animation: pulseAlert 1.5s infinite;
     }
     @keyframes pulseAlert {
-      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.8), 0 0 12px rgba(220, 38, 38, 0.6); }
+      70% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0), 0 0 20px rgba(220, 38, 38, 0.8); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0), 0 0 12px rgba(220, 38, 38, 0.6); }
     }
     .maplibregl-popup-content {
       border-radius: 12px;
       padding: 10px 14px;
-      background: rgba(15, 23, 42, 0.95);
+      background: rgba(11, 15, 25, 0.95);
       color: #f8fafc;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      border: 1px solid rgba(56, 189, 248, 0.25);
       font-size: 12px;
       line-height: 1.4;
     }
@@ -132,7 +136,16 @@ export function getMapHtmlContent(): string {
     .maplibregl-ctrl-group {
       border-radius: 10px;
       overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .maplibregl-ctrl-group button {
+      background: transparent;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .maplibregl-ctrl-group button:hover {
+      background: rgba(56, 189, 248, 0.15);
     }
   </style>
 </head>
@@ -153,7 +166,7 @@ export function getMapHtmlContent(): string {
       }
     }
 
-    var mapStyle = {
+    var rasterFallbackStyle = {
       version: 8,
       sources: {
         'osm-tiles': {
@@ -165,11 +178,11 @@ export function getMapHtmlContent(): string {
           ],
           tileSize: 256,
           maxzoom: 19,
-          attribution: '&copy; OpenStreetMap contributors &mdash; MapLibre'
+          attribution: '&copy; OpenStreetMap contributors'
         }
       },
       layers: [{
-        id: 'osm-tiles-layer',
+        id: 'osm-raster-layer',
         type: 'raster',
         source: 'osm-tiles',
         minzoom: 0,
@@ -179,13 +192,13 @@ export function getMapHtmlContent(): string {
 
     var map = new maplibregl.Map({
       container: 'map',
-      style: mapStyle,
-      center: [88.3639, 22.5726],
+      style: 'https://tiles.openfreemap.org/styles/dark',
+      center: [88.3639, 22.5726], // Kolkata Center [lng, lat]
       zoom: 13,
       minZoom: 2,
       maxZoom: 19,
-      pitch: 35,
-      bearing: 0,
+      pitch: 52, // 3D perspective slant angle
+      bearing: -15, // Cinematic perspective rotation
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
@@ -195,6 +208,7 @@ export function getMapHtmlContent(): string {
     var cameraMarkers = [];
     var trajectoryMarkers = [];
     var vehicleMarker = null;
+    var is3DEnabled = true;
 
     function getVehicleEmoji(type) {
       switch (type) {
@@ -209,6 +223,56 @@ export function getMapHtmlContent(): string {
     }
 
     function initLayers() {
+      // 1. 3D Buildings & Sunlight Shading
+      if (map.getSource('openmaptiles') && !map.getLayer('3d-buildings')) {
+        map.addLayer({
+          id: '3d-buildings',
+          source: 'openmaptiles',
+          'source-layer': 'building',
+          type: 'fill-extrusion',
+          minzoom: 13,
+          paint: {
+            'fill-extrusion-color': [
+              'interpolate',
+              ['linear'],
+              ['coalesce', ['get', 'render_height'], 15],
+              0, '#111827',
+              20, '#1e293b',
+              45, '#334155',
+              80, '#475569',
+              120, '#64748b'
+            ],
+            'fill-extrusion-height': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              13, 0,
+              14, ['coalesce', ['get', 'render_height'], ['*', ['get', 'render_levels'], 3.2], 14]
+            ],
+            'fill-extrusion-base': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              13, 0,
+              14, ['coalesce', ['get', 'render_min_height'], 0]
+            ],
+            'fill-extrusion-opacity': 0.88
+          }
+        });
+
+        try {
+          map.setLight({
+            anchor: 'viewport',
+            color: '#f8fafc',
+            intensity: 0.45,
+            position: [1.15, 210, 30] // Sunlight direction for realistic building shadows
+          });
+        } catch (err) {
+          console.warn('setLight error:', err);
+        }
+      }
+
+      // 2. Traffic Density Heatmap Layer
       if (!map.getSource('traffic-heat-source')) {
         map.addSource('traffic-heat-source', {
           type: 'geojson',
@@ -237,32 +301,35 @@ export function getMapHtmlContent(): string {
         });
       }
 
+      // 3. Glowing Tactical Trajectory Paths
       if (!map.getSource('trajectory-source')) {
         map.addSource('trajectory-source', {
           type: 'geojson',
           data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
         });
+        // Outer glowing neon bloom
         map.addLayer({
           id: 'trajectory-glow-layer',
           type: 'line',
           source: 'trajectory-source',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#60a5fa',
-            'line-width': 10,
-            'line-opacity': 0.45,
-            'line-blur': 4
+            'line-color': '#38bdf8',
+            'line-width': 12,
+            'line-opacity': 0.5,
+            'line-blur': 6
           }
         });
+        // Inner focused laser core
         map.addLayer({
           id: 'trajectory-line-layer',
           type: 'line',
           source: 'trajectory-source',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#2563eb',
+            'line-color': '#0284c7',
             'line-width': 5,
-            'line-opacity': 0.95
+            'line-opacity': 1.0
           }
         });
       }
@@ -278,6 +345,19 @@ export function getMapHtmlContent(): string {
       postToHost({ type: 'MAP_READY' });
     });
 
+    map.on('error', function(e) {
+      if (e && e.error && e.error.message && (e.error.message.includes('style') || e.error.message.includes('Failed to fetch'))) {
+        console.warn('MapLibre vector style fallback to raster OSM', e);
+        if (map.getStyle() !== rasterFallbackStyle) {
+          map.setStyle(rasterFallbackStyle);
+          map.once('style.load', function() {
+            initLayers();
+            if (pendingData) updateMap(pendingData);
+          });
+        }
+      }
+    });
+
     function updateMap(data) {
       if (!data) return;
       if (!isMapReady) {
@@ -290,6 +370,20 @@ export function getMapHtmlContent(): string {
       var trajectory = data.trajectory;
       var showHeatmap = data.showHeatmap;
       var heatmapPoints = data.heatmapPoints || [];
+      var show3D = data.show3D !== undefined ? data.show3D : true;
+
+      // Toggle 3D Buildings & Camera Perspective Tilt
+      if (show3D !== is3DEnabled) {
+        is3DEnabled = show3D;
+        if (map.getLayer('3d-buildings')) {
+          map.setLayoutProperty('3d-buildings', 'visibility', show3D ? 'visible' : 'none');
+        }
+        if (show3D) {
+          map.easeTo({ pitch: 52, bearing: -15, duration: 800 });
+        } else {
+          map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+        }
+      }
 
       // 1. Update Heatmap Layer
       if (map.getLayer('traffic-heat-layer')) {
@@ -316,14 +410,14 @@ export function getMapHtmlContent(): string {
         var el = document.createElement('div');
         el.className = 'camera-marker';
         el.title = camera.name || camera.id;
-        el.innerHTML = '📹<span class="camera-label">' + (camera.name || camera.id) + '</span>';
+        el.innerHTML = '📹<span class=\"camera-label\">' + (camera.name || camera.id) + '</span>';
         el.addEventListener('click', function(ev) {
           ev.stopPropagation();
           postToHost({ type: 'CAMERA_CLICK', cameraId: camera.id });
         });
 
-        var popup = new maplibregl.Popup({ offset: 20 })
-          .setHTML('<strong style="font-size:13px; color:#38bdf8;">' + (camera.name || camera.id) + '</strong><br/><span style="color:#94a3b8;">Status: ' + (camera.status || 'Active') + '</span>');
+        var popup = new maplibregl.Popup({ offset: 22 })
+          .setHTML('<strong style=\"font-size:13px; color:#38bdf8;\">' + (camera.name || camera.id) + '</strong><br/><span style=\"color:#94a3b8;\">Status: ' + (camera.status || 'Active') + '</span>');
 
         var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
           .setLngLat([camera.longitude, camera.latitude])
@@ -349,8 +443,8 @@ export function getMapHtmlContent(): string {
           el.className = 'detection-marker ' + (isLatest ? 'latest' : '');
           el.innerHTML = String(index + 1);
 
-          var popup = new maplibregl.Popup({ offset: 18 })
-            .setHTML('<strong>Point #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
+          var popup = new maplibregl.Popup({ offset: 20 })
+            .setHTML('<strong>Point #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style=\"color:#94a3b8;\">' + (detection.detectedAt || '') + '</span>');
 
           var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
             .setLngLat([detection.longitude, detection.latitude])
@@ -363,7 +457,7 @@ export function getMapHtmlContent(): string {
         if (lineCoords.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
           lineCoords.forEach(function(c) { bounds.extend(c); });
-          map.fitBounds(bounds, { padding: 60, pitch: 35, duration: 1200 });
+          map.fitBounds(bounds, { padding: 70, pitch: is3DEnabled ? 52 : 0, duration: 1200 });
         }
       }
 
@@ -386,10 +480,10 @@ export function getMapHtmlContent(): string {
         var vel = document.createElement('div');
         vel.className = 'vehicle-marker';
         var emoji = getVehicleEmoji(vehicle.vehicleType);
-        vel.innerHTML = '<span class="vehicle-emoji">' + emoji + '</span><span class="vehicle-plate-pill">' + (vehicle.plateNumber || '') + '</span>';
+        vel.innerHTML = '<span class=\"vehicle-emoji\">' + emoji + '</span><span class=\"vehicle-plate-pill\">' + (vehicle.plateNumber || '') + '</span>';
 
-        var vpopup = new maplibregl.Popup({ offset: 24 })
-          .setHTML('<strong>' + vehicle.plateNumber + '</strong><br/>' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '<br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
+        var vpopup = new maplibregl.Popup({ offset: 26 })
+          .setHTML('<strong style=\"color:#38bdf8;\">' + vehicle.plateNumber + '</strong><br/>' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '<br/><span style=\"color:#94a3b8;\">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
 
         vehicleMarker = new maplibregl.Marker({ element: vel, anchor: 'center' })
           .setLngLat([vehicle.longitude, vehicle.latitude])
@@ -399,8 +493,8 @@ export function getMapHtmlContent(): string {
         if (!trajectory || !trajectory.detections || trajectory.detections.length <= 1) {
           map.flyTo({
             center: [vehicle.longitude, vehicle.latitude],
-            zoom: 15,
-            pitch: 40,
+            zoom: 15.5,
+            pitch: is3DEnabled ? 55 : 0,
             duration: 1500
           });
         }
@@ -411,7 +505,7 @@ export function getMapHtmlContent(): string {
         if (cameras.length > 1) {
           var camBounds = new maplibregl.LngLatBounds();
           cameras.forEach(function(c) { camBounds.extend([c.longitude, c.latitude]); });
-          map.fitBounds(camBounds, { padding: 80, pitch: 25, duration: 800 });
+          map.fitBounds(camBounds, { padding: 90, pitch: is3DEnabled ? 45 : 0, duration: 800 });
         }
       }
     }
