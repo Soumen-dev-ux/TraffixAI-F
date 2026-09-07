@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useMemo, useRef } from "react";
+import { StyleSheet, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { getTrafficHeatmapPoints } from "../../data/api/mockHeatmapData";
 import { Camera } from "../../domain/models/Camera";
@@ -12,35 +12,20 @@ type Props = {
   vehicle: Vehicle | null;
   trajectory: VehicleTrajectory | null;
   onCameraPress: (camera: Camera) => void;
+  is3DView?: boolean;
+  showHeatmap?: boolean;
+  style?: any;
 };
-
-function getVehicleEmoji(type: Vehicle["vehicleType"]) {
-  switch (type) {
-    case "car":
-      return "🚗";
-    case "motorcycle":
-      return "🏍️";
-    case "bus":
-      return "🚌";
-    case "truck":
-      return "🚚";
-    case "van":
-      return "🚐";
-    case "taxi":
-      return "🚕";
-    default:
-      return "🚗";
-  }
-}
 
 export default function CityMap({
   cameras,
   vehicle,
   trajectory,
   onCameraPress,
+  is3DView = true,
+  showHeatmap = true,
+  style,
 }: Props) {
-  const [showHeatmap, setShowHeatmap] = useState(true);
-  const [is3DView, setIs3DView] = useState(true);
   const webViewRef = useRef<WebView>(null);
 
   const camerasRef = useRef(cameras);
@@ -106,7 +91,7 @@ export default function CityMap({
   }, [cameras, vehicle, trajectory, showHeatmap, is3DView]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
@@ -123,84 +108,6 @@ export default function CityMap({
         nestedScrollEnabled={true}
         style={styles.webView}
       />
-
-      {/* Top Map Action Buttons */}
-      <View style={styles.topControls}>
-        {/* 3D Perspective View Toggle */}
-        <TouchableOpacity
-          style={[
-            styles.toggleBtn,
-            is3DView ? styles.toggleBtn3DActive : styles.toggleBtnInactive,
-          ]}
-          onPress={() => setIs3DView(!is3DView)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.toggleEmoji}>📐</Text>
-          <Text
-            style={[
-              styles.toggleText,
-              is3DView ? styles.text3DActive : styles.textInactive,
-            ]}
-          >
-            {is3DView ? "3D Perspective" : "2D Flat View"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Heatmap Toggle */}
-        <TouchableOpacity
-          style={[
-            styles.toggleBtn,
-            showHeatmap ? styles.toggleBtnHeatActive : styles.toggleBtnInactive,
-          ]}
-          onPress={() => setShowHeatmap(!showHeatmap)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.toggleEmoji}>🔥</Text>
-          <Text
-            style={[
-              styles.toggleText,
-              showHeatmap ? styles.textHeatActive : styles.textInactive,
-            ]}
-          >
-            {showHeatmap ? "Heatmap On" : "Heatmap Off"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Map Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <Text style={styles.legendEmoji}>📹</Text>
-          <Text style={styles.legendText}>CCTV</Text>
-        </View>
-
-        <View style={styles.legendItem}>
-          <Text style={styles.legendEmoji}>
-            {vehicle ? getVehicleEmoji(vehicle.vehicleType) : "🚗"}
-          </Text>
-          <Text style={styles.legendText}>Vehicle</Text>
-        </View>
-
-        {trajectory && trajectory.detections.length > 0 && (
-          <View style={styles.legendItem}>
-            <View style={styles.routeIndicator} />
-            <Text style={styles.legendText}>Route</Text>
-          </View>
-        )}
-
-        {showHeatmap && (
-          <View style={[styles.legendItem, styles.heatmapLegendItem]}>
-            <Text style={styles.densityLabel}>Low</Text>
-            <View style={styles.heatDotContainer}>
-              <View style={[styles.heatDot, { backgroundColor: "#3b82f6" }]} />
-              <View style={[styles.heatDot, { backgroundColor: "#10b981" }]} />
-              <View style={[styles.heatDot, { backgroundColor: "#f59e0b" }]} />
-              <View style={[styles.heatDot, { backgroundColor: "#ef4444" }]} />
-            </View>
-            <Text style={styles.densityLabel}>High</Text>
-          </View>
-        )}
-      </View>
     </View>
   );
 }
@@ -211,133 +118,11 @@ const styles = StyleSheet.create({
     position: "relative",
     width: "100%",
     height: "100%",
-    minHeight: 400,
-    borderRadius: 18,
+    backgroundColor: "#0f1117",
     overflow: "hidden",
-    backgroundColor: "#0f172a",
   },
   webView: {
     flex: 1,
-    backgroundColor: "#0f172a",
-  },
-  topControls: {
-    position: "absolute",
-    top: 15,
-    right: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    zIndex: 10,
-  },
-  toggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-  },
-  toggleBtn3DActive: {
-    backgroundColor: "#1e293b",
-    borderWidth: 1.5,
-    borderColor: "#38bdf8",
-  },
-  toggleBtnHeatActive: {
-    backgroundColor: "#1e293b",
-    borderWidth: 1.5,
-    borderColor: "#f59e0b",
-  },
-  toggleBtnInactive: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-  },
-  toggleEmoji: {
-    fontSize: 14,
-    marginRight: 5,
-  },
-  toggleText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  text3DActive: {
-    color: "#38bdf8",
-  },
-  textHeatActive: {
-    color: "#f59e0b",
-  },
-  textInactive: {
-    color: "#475569",
-  },
-  legend: {
-    position: "absolute",
-    bottom: 15,
-    left: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    zIndex: 10,
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  legendEmoji: {
-    fontSize: 18,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333333",
-  },
-  routeIndicator: {
-    width: 20,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#2563eb",
-    marginRight: 5,
-  },
-  heatmapLegendItem: {
-    borderLeftWidth: 1,
-    borderLeftColor: "#cbd5e1",
-    paddingLeft: 10,
-    marginRight: 0,
-  },
-  densityLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#64748b",
-  },
-  heatDotContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 4,
-    gap: 2,
-  },
-  heatDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    backgroundColor: "#0f1117",
   },
 });

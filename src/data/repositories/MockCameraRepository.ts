@@ -1,9 +1,9 @@
-import {Camera} from "../../domain/models/Camera";
+import { Camera } from "../../domain/models/Camera";
 import { CameraRepository } from "./CameraRepository";
-import { mockCameras } from "../api/mockCameraData";
+import { CameraApi } from "../api/CameraApi";
 
 export class MockCameraRepository implements CameraRepository {
   async getCameras(): Promise<Camera[]> {
-      return mockCameras;
+    return CameraApi.getCameras();
   }
 }
