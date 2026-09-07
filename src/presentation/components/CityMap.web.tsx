@@ -41,10 +41,34 @@ export default function CityMap({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const camerasRef = useRef(cameras);
   camerasRef.current = cameras;
+  const vehicleRef = useRef(vehicle);
+  vehicleRef.current = vehicle;
+  const trajectoryRef = useRef(trajectory);
+  trajectoryRef.current = trajectory;
+  const showHeatmapRef = useRef(showHeatmap);
+  showHeatmapRef.current = showHeatmap;
   const onCameraPressRef = useRef(onCameraPress);
   onCameraPressRef.current = onCameraPress;
 
-  // Handle messages from the iframe (camera clicks)
+  const sendMapUpdate = () => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      const currentCameras = camerasRef.current;
+      const heatmapPoints = getTrafficHeatmapPoints(currentCameras);
+      iframeRef.current.contentWindow.postMessage(
+        {
+          type: "UPDATE_DATA",
+          cameras: currentCameras,
+          vehicle: vehicleRef.current,
+          trajectory: trajectoryRef.current,
+          showHeatmap: showHeatmapRef.current,
+          heatmapPoints,
+        },
+        "*"
+      );
+    }
+  };
+
+  // Handle messages from the iframe (camera clicks and readiness)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "CAMERA_CLICK") {
@@ -56,7 +80,7 @@ export default function CityMap({
         }
       }
       if (event.data?.type === "MAP_READY") {
-        updateMapData();
+        sendMapUpdate();
       }
     };
 
@@ -64,26 +88,8 @@ export default function CityMap({
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Send message to update iframe map data
-  const updateMapData = () => {
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      const heatmapPoints = getTrafficHeatmapPoints(cameras);
-      iframeRef.current.contentWindow.postMessage(
-        {
-          type: "UPDATE_DATA",
-          cameras,
-          vehicle,
-          trajectory,
-          showHeatmap,
-          heatmapPoints,
-        },
-        "*"
-      );
-    }
-  };
-
   useEffect(() => {
-    updateMapData();
+    sendMapUpdate();
   }, [cameras, vehicle, trajectory, showHeatmap]);
 
   const htmlContent = `
@@ -117,12 +123,28 @@ export default function CityMap({
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
     }
     .camera-marker:hover {
       transform: scale(1.25) translateY(-2px);
       box-shadow: 0 8px 18px rgba(2, 132, 199, 0.45);
       z-index: 50;
+    }
+    .camera-label {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.9);
+      color: #38bdf8;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     .vehicle-marker {
       background: #0f172a;
@@ -228,23 +250,21 @@ export default function CityMap({
     var mapStyle = {
       version: 8,
       sources: {
-        'carto-tiles': {
+        'esri-tiles': {
           type: 'raster',
           tiles: [
-            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
           ],
           tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+          attribution: '&copy; Esri, DeLorme, NAVTEQ, TomTom &mdash; MapLibre'
         }
       },
       layers: [{
-        id: 'carto-tiles-layer',
+        id: 'esri-tiles-layer',
         type: 'raster',
-        source: 'carto-tiles',
+        source: 'esri-tiles',
         minzoom: 0,
-        maxzoom: 20
+        maxzoom: 19
       }]
     };
 
@@ -393,7 +413,7 @@ export default function CityMap({
         var el = document.createElement('div');
         el.className = 'camera-marker';
         el.title = camera.name || camera.id;
-        el.innerHTML = '📹';
+        el.innerHTML = '📹<span class="camera-label">' + (camera.name || camera.id) + '</span>';
         el.addEventListener('click', function(ev) {
           ev.stopPropagation();
           window.parent.postMessage({ type: 'CAMERA_CLICK', cameraId: camera.id }, '*');
