@@ -1,27 +1,11 @@
-import MapView, {
-  Heatmap,
-  Marker,
-  Polyline,
-} from "react-native-maps";
-
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { getTrafficHeatmapPoints } from "../../data/api/mockHeatmapData";
 import { Camera } from "../../domain/models/Camera";
 import { Vehicle } from "../../domain/models/Vehicle";
 import { VehicleTrajectory } from "../../domain/models/VehicleTrajectory";
+import { getMapHtmlContent } from "./mapHtmlContent";
 
 type Props = {
   cameras: Camera[];
@@ -30,28 +14,20 @@ type Props = {
   onCameraPress: (camera: Camera) => void;
 };
 
-function getVehicleEmoji(
-  type: Vehicle["vehicleType"]
-) {
+function getVehicleEmoji(type: Vehicle["vehicleType"]) {
   switch (type) {
     case "car":
       return "🚗";
-
     case "motorcycle":
       return "🏍️";
-
     case "bus":
       return "🚌";
-
     case "truck":
       return "🚚";
-
     case "van":
       return "🚐";
-
     case "taxi":
       return "🚕";
-
     default:
       return "🚗";
   }
@@ -63,219 +39,92 @@ export default function CityMap({
   trajectory,
   onCameraPress,
 }: Props) {
-  const mapRef = useRef<MapView>(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const webViewRef = useRef<WebView>(null);
 
-  const heatmapPoints = useMemo(() => {
-    return getTrafficHeatmapPoints(cameras);
-  }, [cameras]);
+  const camerasRef = useRef(cameras);
+  camerasRef.current = cameras;
+  const vehicleRef = useRef(vehicle);
+  vehicleRef.current = vehicle;
+  const trajectoryRef = useRef(trajectory);
+  trajectoryRef.current = trajectory;
+  const showHeatmapRef = useRef(showHeatmap);
+  showHeatmapRef.current = showHeatmap;
+  const onCameraPressRef = useRef(onCameraPress);
+  onCameraPressRef.current = onCameraPress;
 
-  /*
-   * Focus on the searched vehicle
-   */
-  useEffect(() => {
-    if (!vehicle || !mapRef.current) {
-      return;
-    }
+  const htmlContent = useMemo(() => getMapHtmlContent(), []);
 
-    mapRef.current.animateToRegion(
-      {
-        latitude: vehicle.latitude,
-        longitude: vehicle.longitude,
-        latitudeDelta: 0.03,
-        longitudeDelta: 0.03,
-      },
-      800
-    );
-  }, [vehicle]);
+  const sendMapUpdate = () => {
+    if (!webViewRef.current) return;
+    const currentCameras = camerasRef.current;
+    const heatmapPoints = getTrafficHeatmapPoints(currentCameras);
+    const payload = {
+      type: "UPDATE_DATA",
+      cameras: currentCameras,
+      vehicle: vehicleRef.current,
+      trajectory: trajectoryRef.current,
+      showHeatmap: showHeatmapRef.current,
+      heatmapPoints,
+    };
 
-  /*
-   * Fit the entire trajectory on the map
-   */
-  useEffect(() => {
-    if (
-      !trajectory ||
-      trajectory.detections.length < 2 ||
-      !mapRef.current
-    ) {
-      return;
-    }
+    const jsCode = `(function() {
+      var data = ${JSON.stringify(payload)};
+      if (window.__traffixUpdateMap) {
+        window.__traffixUpdateMap(data);
+      }
+    })(); true;`;
 
-    const coordinates =
-      trajectory.detections.map(
-        (detection) => ({
-          latitude: detection.latitude,
-          longitude: detection.longitude,
-        })
-      );
+    webViewRef.current.injectJavaScript(jsCode);
+    webViewRef.current.postMessage(JSON.stringify(payload));
+  };
 
-    setTimeout(() => {
-      mapRef.current?.fitToCoordinates(
-        coordinates,
-        {
-          edgePadding: {
-            top: 100,
-            right: 60,
-            bottom: 100,
-            left: 60,
-          },
-          animated: true,
+  const handleMessage = (event: WebViewMessageEvent) => {
+    try {
+      const raw = event.nativeEvent.data;
+      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+      if (data?.type === "CAMERA_CLICK") {
+        const found = camerasRef.current.find((c) => c.id === data.cameraId);
+        if (found) {
+          onCameraPressRef.current(found);
         }
-      );
-    }, 500);
-  }, [trajectory]);
+      } else if (data?.type === "MAP_READY") {
+        sendMapUpdate();
+      }
+    } catch (err) {
+      console.warn("CityMap mobile onMessage parse error:", err);
+    }
+  };
+
+  useEffect(() => {
+    sendMapUpdate();
+  }, [cameras, vehicle, trajectory, showHeatmap]);
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={{
-          latitude: 22.5726,
-          longitude: 88.3639,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      >
-        {/* ========================= */}
-        {/* TRAFFIC HEATMAP LAYER     */}
-        {/* ========================= */}
-        {showHeatmap && heatmapPoints.length > 0 && (
-          <Heatmap
-            points={heatmapPoints}
-            opacity={0.7}
-            radius={40}
-            gradient={{
-              colors: [
-                "#3b82f6",
-                "#06b6d4",
-                "#10b981",
-                "#f59e0b",
-                "#ef4444",
-              ],
-              startPoints: [0.1, 0.35, 0.6, 0.8, 1.0],
-              colorMapSize: 256,
-            }}
-          />
-        )}
+      <WebView
+        ref={webViewRef}
+        originWhitelist={["*"]}
+        source={{ html: htmlContent }}
+        onMessage={handleMessage}
+        onLoadEnd={sendMapUpdate}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
+        mixedContentMode="always"
+        androidLayerType="hardware"
+        scrollEnabled={false}
+        nestedScrollEnabled={true}
+        style={styles.webView}
+      />
 
-        {/* ========================= */}
-        {/* CCTV CAMERA MARKERS       */}
-        {/* ========================= */}
-        {cameras.map((camera) => (
-          <Marker
-            key={`camera-${camera.id}`}
-            coordinate={{
-              latitude: camera.latitude,
-              longitude: camera.longitude,
-            }}
-            title={camera.name}
-            description={camera.id}
-            onPress={() =>
-              onCameraPress(camera)
-            }
-          >
-            <View style={styles.cameraMarker}>
-              <Text style={styles.cameraEmoji}>
-                📹
-              </Text>
-            </View>
-          </Marker>
-        ))}
-
-        {/* ========================= */}
-        {/* VEHICLE TRAJECTORY         */}
-        {/* ========================= */}
-        {trajectory &&
-          trajectory.detections.length > 1 && (
-            <Polyline
-              coordinates={trajectory.detections.map(
-                (detection) => ({
-                  latitude:
-                    detection.latitude,
-                  longitude:
-                    detection.longitude,
-                })
-              )}
-              strokeWidth={5}
-              strokeColor="#2563eb"
-              lineCap="round"
-              lineJoin="round"
-            />
-          )}
-
-        {/* ========================= */}
-        {/* DETECTION MARKERS          */}
-        {/* ========================= */}
-        {trajectory?.detections.map(
-          (detection, index) => {
-            const isLatest =
-              index ===
-              trajectory.detections.length - 1;
-
-            return (
-              <Marker
-                key={`detection-${detection.id}`}
-                coordinate={{
-                  latitude:
-                    detection.latitude,
-                  longitude:
-                    detection.longitude,
-                }}
-                title={detection.cameraName}
-                description={
-                  detection.detectedAt
-                }
-              >
-                <View
-                  style={[
-                    styles.detectionMarker,
-                    isLatest &&
-                      styles.latestMarker,
-                  ]}
-                >
-                  <Text style={styles.detectionNumber}>
-                    {index + 1}
-                  </Text>
-                </View>
-              </Marker>
-            );
-          }
-        )}
-
-        {/* ========================= */}
-        {/* CURRENT VEHICLE            */}
-        {/* ========================= */}
-        {vehicle && (
-          <Marker
-            key={`vehicle-${vehicle.id}`}
-            coordinate={{
-              latitude: vehicle.latitude,
-              longitude: vehicle.longitude,
-            }}
-            title={vehicle.plateNumber}
-            description={`${vehicle.color} ${vehicle.vehicleType}`}
-          >
-            <View style={styles.vehicleMarker}>
-              <Text style={styles.vehicleEmoji}>
-                {getVehicleEmoji(
-                  vehicle.vehicleType
-                )}
-              </Text>
-            </View>
-          </Marker>
-        )}
-      </MapView>
-
-      {/* =========================== */}
-      {/* HEATMAP TOGGLE BUTTON       */}
-      {/* =========================== */}
+      {/* Heatmap Layer Toggle Control */}
       <TouchableOpacity
         style={[
           styles.heatmapToggle,
-          showHeatmap
-            ? styles.heatmapToggleActive
-            : styles.heatmapToggleInactive,
+          showHeatmap ? styles.heatmapToggleActive : styles.heatmapToggleInactive,
         ]}
         onPress={() => setShowHeatmap(!showHeatmap)}
         activeOpacity={0.8}
@@ -291,46 +140,31 @@ export default function CityMap({
         </Text>
       </TouchableOpacity>
 
-      {/* =========================== */}
-      {/* MAP LEGEND                  */}
-      {/* =========================== */}
+      {/* Map Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <Text style={styles.legendEmoji}>
-            📹
-          </Text>
-          <Text style={styles.legendText}>
-            CCTV
-          </Text>
+          <Text style={styles.legendEmoji}>📹</Text>
+          <Text style={styles.legendText}>CCTV</Text>
         </View>
 
         <View style={styles.legendItem}>
           <Text style={styles.legendEmoji}>
-            {vehicle
-              ? getVehicleEmoji(
-                  vehicle.vehicleType
-                )
-              : "🚗"}
+            {vehicle ? getVehicleEmoji(vehicle.vehicleType) : "🚗"}
           </Text>
-          <Text style={styles.legendText}>
-            Vehicle
-          </Text>
+          <Text style={styles.legendText}>Vehicle</Text>
         </View>
 
-        {trajectory &&
-          trajectory.detections.length > 0 && (
-            <View style={styles.legendItem}>
-              <View style={styles.routeIndicator} />
-              <Text style={styles.legendText}>
-                Route
-              </Text>
-            </View>
-          )}
+        {trajectory && trajectory.detections.length > 0 && (
+          <View style={styles.legendItem}>
+            <View style={styles.routeIndicator} />
+            <Text style={styles.legendText}>Route</Text>
+          </View>
+        )}
 
         {showHeatmap && (
           <View style={[styles.legendItem, styles.heatmapLegendItem]}>
             <Text style={styles.densityLabel}>Low</Text>
-            <View style={styles.heatColorBar}>
+            <View style={styles.heatDotContainer}>
               <View style={[styles.heatDot, { backgroundColor: "#3b82f6" }]} />
               <View style={[styles.heatDot, { backgroundColor: "#10b981" }]} />
               <View style={[styles.heatDot, { backgroundColor: "#f59e0b" }]} />
@@ -348,10 +182,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     position: "relative",
-  },
-  map: {
-    flex: 1,
     width: "100%",
+    height: "100%",
+    minHeight: 400,
+    borderRadius: 18,
+    overflow: "hidden",
+    backgroundColor: "#0f172a",
+  },
+  webView: {
+    flex: 1,
+    backgroundColor: "#0f172a",
   },
   heatmapToggle: {
     position: "absolute",
@@ -396,67 +236,14 @@ const styles = StyleSheet.create({
   textInactive: {
     color: "#64748b",
   },
-  cameraMarker: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 6,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-  },
-  cameraEmoji: {
-    fontSize: 24,
-  },
-  vehicleMarker: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 6,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-  },
-  vehicleEmoji: {
-    fontSize: 30,
-  },
-  detectionMarker: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "#2563eb",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 4,
-  },
-  latestMarker: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderColor: "#dc2626",
-  },
-  detectionNumber: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1e40af",
-  },
   legend: {
     position: "absolute",
     bottom: 15,
     left: 15,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    flexWrap: "wrap",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -502,7 +289,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#64748b",
   },
-  heatColorBar: {
+  heatDotContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 4,
