@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "electron": "concurrently -k \"expo start\" \"wait-on tcp:8081 && electron electron/main.js\"",
+    "desktop": "concurrently -k \"expo start\" \"wait-on tcp:8081 && electron electron/main.js\"",
+    "electron:dev": "concurrently -k \"expo start\" \"wait-on tcp:8081 && electron electron/main.js\"",
     "electron:window": "electron electron/main.js",
     "electron:prod": "expo export --platform web && electron electron/main.js",
     "lint": "expo lint"

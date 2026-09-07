@@ -463,9 +463,10 @@ Designed for traffic junction booths and edge control stations running offline o
 
 ### Option A: Development Mode (Universal: Mobile QR in Terminal + Native Desktop Window)
 ```bash
-npm run electron
+npm run desktop
+# (or: npm run electron:dev)
 ```
-*What this does:* Concurrently boots Metro on port 8081, prints the **mobile QR code** directly in your terminal (for scanning with Expo Go on your phone), and automatically opens the native Electron desktop dashboard window ($1400 \times 900$).
+*What this does:* Concurrently boots Metro on port 8081, prints the **interactive mobile QR code** directly in your terminal (for scanning with Expo Go on your phone), and automatically opens the native Electron desktop dashboard window ($1400 \times 900$).
 
 ### Option B: Launch Desktop Window Only (If Web Server is Already Running)
 If you already started `npm run web` in another terminal tab:
