@@ -534,7 +534,7 @@ export default function CityMap({
           border: "none",
           borderRadius: 18,
         },
-        onLoad: updateMapData,
+        onLoad: sendMapUpdate,
       })}
 
       {/* Heatmap Layer Toggle Control */}
