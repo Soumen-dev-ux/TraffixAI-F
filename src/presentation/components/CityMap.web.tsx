@@ -89,84 +89,164 @@ export default function CityMap({
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <title>MapLibre Traffic Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     html, body, #map {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background: #f0f2f5;
+      background: #0f172a;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
     }
     .camera-marker {
       background: #ffffff;
-      border-radius: 20px;
-      padding: 5px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-      font-size: 20px;
+      border: 2px solid #0284c7;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      font-size: 18px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s ease;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
     }
     .camera-marker:hover {
-      transform: scale(1.2);
+      transform: scale(1.25) translateY(-2px);
+      box-shadow: 0 8px 18px rgba(2, 132, 199, 0.45);
+      z-index: 50;
     }
     .vehicle-marker {
-      background: #ffffff;
+      background: #0f172a;
+      color: #ffffff;
+      border: 2px solid #38bdf8;
       border-radius: 24px;
-      padding: 6px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
-      font-size: 26px;
+      padding: 4px 10px;
+      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.4);
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      animation: vehicleFloat 2s ease-in-out infinite alternate;
+    }
+    @keyframes vehicleFloat {
+      from { transform: translateY(0px); }
+      to { transform: translateY(-4px); }
+    }
+    .vehicle-emoji {
+      font-size: 20px;
+    }
+    .vehicle-plate-pill {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #f8fafc;
     }
     .detection-marker {
-      width: 26px;
-      height: 26px;
-      border-radius: 13px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
       background: #ffffff;
-      border: 2px solid #2563eb;
+      border: 2.5px solid #2563eb;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 12px;
       color: #1e40af;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
     }
     .detection-marker.latest {
-      width: 32px;
-      height: 32px;
-      border-radius: 16px;
-      border-color: #dc2626;
-      color: #991b1b;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #dc2626;
+      border-color: #ffffff;
+      color: #ffffff;
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35), 0 4px 12px rgba(0,0,0,0.4);
+      animation: pulseAlert 1.5s infinite;
     }
-    .leaflet-popup-content-wrapper {
-      border-radius: 8px;
+    @keyframes pulseAlert {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+    .maplibregl-popup-content {
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.95);
+      color: #f8fafc;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .maplibregl-popup-close-button {
+      color: #94a3b8;
+      font-size: 16px;
       padding: 4px;
+    }
+    .maplibregl-ctrl-group {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <script>
-    var map = L.map('map', { zoomControl: true }).setView([22.5726, 88.3639], 13);
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    var rasterFallback = {
+      version: 8,
+      sources: {
+        'osm-tiles': {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors'
+        }
+      },
+      layers: [{
+        id: 'osm-layer',
+        type: 'raster',
+        source: 'osm-tiles',
+        minzoom: 0,
+        maxzoom: 19
+      }]
+    };
 
-    var heatLayer = null;
-    var cameraLayerGroup = L.layerGroup().addTo(map);
-    var trajectoryLayerGroup = L.layerGroup().addTo(map);
-    var vehicleLayerGroup = L.layerGroup().addTo(map);
+    var mapStyle = 'https://tiles.openfreemap.org/styles/liberty';
+
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: mapStyle,
+      center: [88.3639, 22.5726], // [lng, lat]
+      zoom: 13,
+      pitch: 35, // 3D perspective tilt
+      bearing: 0,
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
+
+    map.on('error', function(e) {
+      if (e && e.error && e.error.message && e.error.message.includes('style')) {
+        console.warn('MapLibre vector style fallback to raster OSM tiles', e);
+        map.setStyle(rasterFallback);
+      }
+    });
+
+    var isMapReady = false;
+    var pendingData = null;
+    var cameraMarkers = [];
+    var trajectoryMarkers = [];
+    var vehicleMarker = null;
 
     function getVehicleEmoji(type) {
       switch (type) {
@@ -180,107 +260,202 @@ export default function CityMap({
       }
     }
 
+    function initLayers() {
+      // 1. Heatmap Source & WebGL Layer
+      if (!map.getSource('traffic-heat-source')) {
+        map.addSource('traffic-heat-source', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        });
+        map.addLayer({
+          id: 'traffic-heat-layer',
+          type: 'heatmap',
+          source: 'traffic-heat-source',
+          paint: {
+            'heatmap-weight': ['get', 'weight'],
+            'heatmap-intensity': 1.6,
+            'heatmap-radius': 38,
+            'heatmap-opacity': 0.75,
+            'heatmap-color': [
+              'interpolate', ['linear'], ['heatmap-density'],
+              0, 'rgba(59,130,246,0)',
+              0.2, '#3b82f6',
+              0.4, '#06b6d4',
+              0.6, '#10b981',
+              0.8, '#f59e0b',
+              1.0, '#ef4444'
+            ]
+          }
+        });
+      }
+
+      // 2. Trajectory Line Source & Layers
+      if (!map.getSource('trajectory-source')) {
+        map.addSource('trajectory-source', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+        });
+        map.addLayer({
+          id: 'trajectory-glow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#60a5fa',
+            'line-width': 10,
+            'line-opacity': 0.45,
+            'line-blur': 4
+          }
+        });
+        map.addLayer({
+          id: 'trajectory-line-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#2563eb',
+            'line-width': 5,
+            'line-opacity': 0.95
+          }
+        });
+      }
+    }
+
+    map.on('load', function() {
+      isMapReady = true;
+      initLayers();
+      if (pendingData) {
+        updateMap(pendingData);
+        pendingData = null;
+      }
+      window.parent.postMessage({ type: 'MAP_READY' }, '*');
+    });
+
     function updateMap(data) {
       if (!data) return;
+      if (!isMapReady) {
+        pendingData = data;
+        return;
+      }
+
       var cameras = data.cameras || [];
       var vehicle = data.vehicle;
       var trajectory = data.trajectory;
       var showHeatmap = data.showHeatmap;
       var heatmapPoints = data.heatmapPoints || [];
 
-      // Update Heatmap
-      if (heatLayer) {
-        map.removeLayer(heatLayer);
-        heatLayer = null;
+      // 1. Update Heatmap Layer
+      if (map.getLayer('traffic-heat-layer')) {
+        map.setLayoutProperty('traffic-heat-layer', 'visibility', showHeatmap ? 'visible' : 'none');
       }
-      if (showHeatmap && heatmapPoints.length > 0 && typeof L.heatLayer === 'function') {
-        var heatPoints = heatmapPoints.map(function(p) {
-          return [p.latitude, p.longitude, p.weight];
+      if (map.getSource('traffic-heat-source')) {
+        var heatFeatures = heatmapPoints.map(function(p) {
+          return {
+            type: 'Feature',
+            properties: { weight: p.weight || 0.5 },
+            geometry: { type: 'Point', coordinates: [p.longitude, p.latitude] }
+          };
         });
-        heatLayer = L.heatLayer(heatPoints, {
-          radius: 32,
-          blur: 20,
-          maxZoom: 16,
-          max: 1.0,
-          gradient: {
-            0.2: '#3b82f6',
-            0.4: '#06b6d4',
-            0.6: '#10b981',
-            0.8: '#f59e0b',
-            1.0: '#ef4444'
-          }
-        }).addTo(map);
+        map.getSource('traffic-heat-source').setData({
+          type: 'FeatureCollection',
+          features: heatFeatures
+        });
       }
 
-      // Update Cameras
-      cameraLayerGroup.clearLayers();
+      // 2. Update Cameras
+      cameraMarkers.forEach(function(m) { m.remove(); });
+      cameraMarkers = [];
       cameras.forEach(function(camera) {
-        var icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: '<div class="camera-marker" title="' + (camera.name || '') + '">📹</div>',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
-        });
-        var marker = L.marker([camera.latitude, camera.longitude], { icon: icon });
-        marker.bindTooltip(camera.name || camera.id);
-        marker.on('click', function() {
+        var el = document.createElement('div');
+        el.className = 'camera-marker';
+        el.title = camera.name || camera.id;
+        el.innerHTML = '📹';
+        el.addEventListener('click', function(ev) {
+          ev.stopPropagation();
           window.parent.postMessage({ type: 'CAMERA_CLICK', cameraId: camera.id }, '*');
         });
-        cameraLayerGroup.addLayer(marker);
+
+        var popup = new maplibregl.Popup({ offset: 20 })
+          .setHTML('<strong style="font-size:13px; color:#38bdf8;">' + (camera.name || camera.id) + '</strong><br/><span style="color:#94a3b8;">Status: ' + (camera.status || 'Active') + '</span>');
+
+        var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([camera.longitude, camera.latitude])
+          .setPopup(popup)
+          .addTo(map);
+
+        cameraMarkers.push(marker);
       });
 
-      // Update Trajectory
-      trajectoryLayerGroup.clearLayers();
-      if (trajectory && trajectory.detections && trajectory.detections.length > 0) {
-        var coords = trajectory.detections.map(function(d) {
-          return [d.latitude, d.longitude];
-        });
+      // 3. Update Trajectory
+      trajectoryMarkers.forEach(function(m) { m.remove(); });
+      trajectoryMarkers = [];
 
-        if (coords.length > 1) {
-          var polyline = L.polyline(coords, {
-            color: '#2563eb',
-            weight: 5,
-            opacity: 0.8,
-            lineCap: 'round',
-            lineJoin: 'round'
-          });
-          trajectoryLayerGroup.addLayer(polyline);
-        }
+      var lineCoords = [];
+      if (trajectory && trajectory.detections && trajectory.detections.length > 0) {
+        lineCoords = trajectory.detections.map(function(d) {
+          return [d.longitude, d.latitude];
+        });
 
         trajectory.detections.forEach(function(detection, index) {
           var isLatest = index === trajectory.detections.length - 1;
-          var icon = L.divIcon({
-            className: 'custom-div-icon',
-            html: '<div class="detection-marker ' + (isLatest ? 'latest' : '') + '">' + (index + 1) + '</div>',
-            iconSize: [isLatest ? 32 : 26, isLatest ? 32 : 26],
-            iconAnchor: [isLatest ? 16 : 13, isLatest ? 16 : 13]
-          });
-          var marker = L.marker([detection.latitude, detection.longitude], { icon: icon });
-          marker.bindTooltip(detection.cameraName + '<br/>' + detection.detectedAt);
-          trajectoryLayerGroup.addLayer(marker);
+          var el = document.createElement('div');
+          el.className = 'detection-marker ' + (isLatest ? 'latest' : '');
+          el.innerHTML = String(index + 1);
+
+          var popup = new maplibregl.Popup({ offset: 18 })
+            .setHTML('<strong>Point #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
+
+          var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([detection.longitude, detection.latitude])
+            .setPopup(popup)
+            .addTo(map);
+
+          trajectoryMarkers.push(marker);
         });
 
-        if (coords.length > 1) {
-          map.fitBounds(L.polyline(coords).getBounds(), { padding: [50, 50] });
+        if (lineCoords.length > 1) {
+          var bounds = new maplibregl.LngLatBounds();
+          lineCoords.forEach(function(c) { bounds.extend(c); });
+          map.fitBounds(bounds, { padding: 60, pitch: 35, duration: 1200 });
         }
       }
 
-      // Update Vehicle
-      vehicleLayerGroup.clearLayers();
-      if (vehicle) {
-        var emoji = getVehicleEmoji(vehicle.vehicleType);
-        var icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: '<div class="vehicle-marker">' + emoji + '</div>',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
+      if (map.getSource('trajectory-source')) {
+        map.getSource('trajectory-source').setData({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: lineCoords.length > 1 ? lineCoords : []
+          }
         });
-        var marker = L.marker([vehicle.latitude, vehicle.longitude], { icon: icon });
-        marker.bindTooltip(vehicle.plateNumber + ' (' + vehicle.color + ' ' + vehicle.vehicleType + ')');
-        vehicleLayerGroup.addLayer(marker);
+      }
+
+      // 4. Update Vehicle
+      if (vehicleMarker) {
+        vehicleMarker.remove();
+        vehicleMarker = null;
+      }
+      if (vehicle) {
+        var el = document.createElement('div');
+        el.className = 'vehicle-marker';
+        var emoji = getVehicleEmoji(vehicle.vehicleType);
+        el.innerHTML = '<span class="vehicle-emoji">' + emoji + '</span><span class="vehicle-plate-pill">' + (vehicle.plateNumber || '') + '</span>';
+
+        var popup = new maplibregl.Popup({ offset: 24 })
+          .setHTML('<strong>' + vehicle.plateNumber + '</strong><br/>' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '<br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
+
+        vehicleMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([vehicle.longitude, vehicle.latitude])
+          .setPopup(popup)
+          .addTo(map);
 
         if (!trajectory || !trajectory.detections || trajectory.detections.length <= 1) {
-          map.panTo([vehicle.latitude, vehicle.longitude], { animate: true });
+          map.flyTo({
+            center: [vehicle.longitude, vehicle.latitude],
+            zoom: 15,
+            pitch: 40,
+            duration: 1500
+          });
         }
       }
     }
@@ -289,10 +464,6 @@ export default function CityMap({
       if (event.data && event.data.type === 'UPDATE_DATA') {
         updateMap(event.data);
       }
-    });
-
-    window.addEventListener('load', function() {
-      window.parent.postMessage({ type: 'MAP_READY' }, '*');
     });
   </script>
 </body>
