@@ -276,7 +276,7 @@ export default function CityMap({
       style: mapStyle,
       center: [88.3639, 22.5726], // [lng, lat]
       zoom: 13,
-      minZoom: 9,
+      minZoom: 2,
       maxZoom: 19,
       pitch: 35, // 3D perspective tilt
       bearing: 0,
