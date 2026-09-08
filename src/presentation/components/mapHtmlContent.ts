@@ -181,19 +181,77 @@ export function getMapHtmlContent(): string {
 </head>
 <body>
   <div id="map"></div>
+  <canvas id="route-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
   <script>
     var activeLineCoords = [];
     var routeCache = {};
     var currentActiveCacheKey = '';
 
+    function resizeCanvas() {
+      var canvas = document.getElementById('route-canvas');
+      if (canvas) {
+        canvas.width = document.body.clientWidth || window.innerWidth;
+        canvas.height = document.body.clientHeight || window.innerHeight;
+      }
+    }
+
+    function drawRouteCanvas() {
+      var canvas = document.getElementById('route-canvas');
+      if (!canvas || !map) return;
+      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!activeLineCoords || activeLineCoords.length < 2) return;
+
+      var pts = [];
+      for (var i = 0; i < activeLineCoords.length; i++) {
+        try {
+          var p = map.project(activeLineCoords[i]);
+          if (p && !isNaN(p.x) && !isNaN(p.y)) {
+            pts.push(p);
+          }
+        } catch(e) {}
+      }
+      if (pts.length < 2) return;
+
+      // 1. Dark contrast casing
+      ctx.beginPath();
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+      ctx.stroke();
+
+      // 2. Luminous Emerald ribbon
+      ctx.beginPath();
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+      ctx.stroke();
+
+      // 3. Cyber Cyan laser core
+      ctx.beginPath();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var m = 1; m < pts.length; m++) ctx.lineTo(pts[m].x, pts[m].y);
+      ctx.stroke();
+    }
+
     function applyRouteCoordinates(coords, shouldFitBounds) {
       activeLineCoords = coords || [];
+      resizeCanvas();
+      drawRouteCanvas();
 
-      if (!map.getSource('trajectory-source')) {
-        initLayers();
-      }
-      if (map.getSource('trajectory-source')) {
-        map.getSource('trajectory-source').setData({
+      var src = map && map.getSource('trajectory-source');
+      if (src) {
+        src.setData({
           type: 'FeatureCollection',
           features: coords && coords.length > 1 ? [{
             type: 'Feature',
@@ -243,6 +301,14 @@ export function getMapHtmlContent(): string {
         'kolkata-buildings': {
           type: 'geojson',
           data: ${buildingsJson}
+        },
+        'traffic-heat-source': {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        },
+        'trajectory-source': {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
         }
       },
       layers: [
@@ -274,6 +340,75 @@ export function getMapHtmlContent(): string {
             'fill-extrusion-base': 0,
             'fill-extrusion-opacity': 0.85
           }
+        },
+        {
+          id: 'traffic-heat-layer',
+          type: 'heatmap',
+          source: 'traffic-heat-source',
+          maxzoom: 18,
+          paint: {
+            'heatmap-weight': ['get', 'weight'],
+            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1, 15, 2.5],
+            'heatmap-color': [
+              'interpolate', ['linear'], ['heatmap-density'],
+              0, 'rgba(0, 0, 255, 0)',
+              0.2, '#3b82f6',
+              0.4, '#06b6d4',
+              0.6, '#10b981',
+              0.8, '#f59e0b',
+              1.0, '#ef4444'
+            ],
+            'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
+            'heatmap-opacity': 0.72
+          }
+        },
+        // Layer A: Bold Dark Contrast Casing (outer border)
+        {
+          id: 'trajectory-shadow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#090d16',
+            'line-width': 10,
+            'line-opacity': 0.95
+          }
+        },
+        // Layer B: Luminous Emerald Glow Ribbon
+        {
+          id: 'trajectory-glow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#10b981',
+            'line-width': 7,
+            'line-opacity': 0.95
+          }
+        },
+        // Layer C: High-Luminance Neon Mint Core
+        {
+          id: 'trajectory-line-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#34d399',
+            'line-width': 4,
+            'line-opacity': 1.0
+          }
+        },
+        // Layer D: Sharp Center Pure White Laser Line
+        {
+          id: 'trajectory-highlight-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1.8,
+            'line-opacity': 0.95
+          }
         }
       ]
     };
@@ -300,100 +435,7 @@ export function getMapHtmlContent(): string {
     var is3DCurrent = true;
 
     function initLayers() {
-      try {
-        // 1. WebGL Traffic Density Heatmap
-        if (!map.getSource('traffic-heat-source')) {
-          map.addSource('traffic-heat-source', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
-          });
-          map.addLayer({
-            id: 'traffic-heat-layer',
-            type: 'heatmap',
-            source: 'traffic-heat-source',
-            maxzoom: 18,
-            paint: {
-              'heatmap-weight': ['get', 'weight'],
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1, 15, 2.5],
-              'heatmap-color': [
-                'interpolate', ['linear'], ['heatmap-density'],
-                0, 'rgba(0, 0, 255, 0)',
-                0.2, '#3b82f6',
-                0.4, '#06b6d4',
-                0.6, '#10b981',
-                0.8, '#f59e0b',
-                1.0, '#ef4444'
-              ],
-              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
-              'heatmap-opacity': 0.72
-            }
-          });
-        }
-
-        // 2. Elevated 3D Trajectory Ribbon (Multi-Layer Depth)
-        if (!map.getSource('trajectory-source')) {
-          map.addSource('trajectory-source', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
-          });
-
-          // Layer A: Bold Dark Contrast Casing
-          map.addLayer({
-            id: 'trajectory-shadow-layer',
-            type: 'line',
-            source: 'trajectory-source',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: {
-              'line-color': '#0f172a',
-              'line-width': 11,
-              'line-opacity': 0.95
-            }
-          });
-
-          // Layer B: Ultra-Vibrant Electric Emerald Glow
-          map.addLayer({
-            id: 'trajectory-glow-layer',
-            type: 'line',
-            source: 'trajectory-source',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: {
-              'line-color': '#10b981',
-              'line-width': 8,
-              'line-opacity': 1.0
-            }
-          });
-
-          // Layer C: High-Luminance Neon Mint Core
-          map.addLayer({
-            id: 'trajectory-line-layer',
-            type: 'line',
-            source: 'trajectory-source',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: {
-              'line-color': '#34d399',
-              'line-width': 5,
-              'line-opacity': 1.0
-            }
-          });
-
-          // Layer D: Sharp Center Pure White Laser Line
-          map.addLayer({
-            id: 'trajectory-highlight-layer',
-            type: 'line',
-            source: 'trajectory-source',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: {
-              'line-color': '#ffffff',
-              'line-width': 2,
-              'line-opacity': 1.0
-            }
-          });
-        }
-        return true;
-      } catch (e) {
-        console.warn('initLayers caught error:', e);
-        return false;
-      }
+      return true;
     }
 
     function setupReady() {
@@ -552,7 +594,7 @@ export function getMapHtmlContent(): string {
           applyRouteCoordinates(routeCache[cacheKey], true);
         } else {
           // Query OSRM Driving Road Network to snap directly along actual Kolkata streets
-          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
+          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=simplified&geometries=geojson';
           fetch(osrmUrl)
             .then(function(res) { return res.json(); })
             .then(function(resData) {
@@ -619,6 +661,13 @@ export function getMapHtmlContent(): string {
         }
       }
     }
+
+    map.on('move', drawRouteCanvas);
+    map.on('zoom', drawRouteCanvas);
+    window.addEventListener('resize', function() {
+      resizeCanvas();
+      drawRouteCanvas();
+    });
 
     window.__traffixUpdateMap = function(data) {
       if (typeof data === 'string') {
