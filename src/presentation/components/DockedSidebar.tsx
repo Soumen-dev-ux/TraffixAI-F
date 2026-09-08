@@ -616,14 +616,18 @@ export const DockedSidebar: React.FC<Props> = ({
               </Text>
               <View style={[styles.breakdownCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
                 {[
-                  { type: 'Cars', count: '54', icon: 'car' },
-                  { type: 'Buses', count: '16', icon: 'bus' },
-                  { type: 'Trucks', count: '12', icon: 'truck' },
-                  { type: 'Motorcycles', count: '9', icon: 'bicycle' },
+                  { type: 'Cars', count: '54', icon: 'car', isMaterial: false },
+                  { type: 'Buses', count: '16', icon: 'bus', isMaterial: false },
+                  { type: 'Trucks', count: '12', icon: 'truck', isMaterial: true },
+                  { type: 'Motorcycles', count: '9', icon: 'bicycle', isMaterial: false },
                 ].map((item) => (
                   <View key={item.type} style={[styles.breakdownRow, { borderBottomColor: colors.border }]}>
                     <View style={styles.breakdownLeft}>
-                      <Ionicons name={item.icon as any} size={18} color={colors.accent} />
+                      {item.isMaterial ? (
+                        <MaterialCommunityIcons name="truck" size={18} color={colors.accent} />
+                      ) : (
+                        <Ionicons name={item.icon as any} size={18} color={colors.accent} />
+                      )}
                       <Text style={[styles.breakdownLabel, { color: colors.text }]}>{item.type}</Text>
                     </View>
                     <Text style={[styles.breakdownCount, { color: colors.text }]}>{item.count}</Text>
