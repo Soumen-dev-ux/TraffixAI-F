@@ -195,6 +195,56 @@ export function getMapHtmlContent(): string {
       }
     }
 
+    var CS_INSIDE = 0, CS_LEFT = 1, CS_RIGHT = 2, CS_BOTTOM = 4, CS_TOP = 8;
+    function computeOutCode(x, y, xmin, ymin, xmax, ymax) {
+      var code = CS_INSIDE;
+      if (x < xmin) code |= CS_LEFT;
+      else if (x > xmax) code |= CS_RIGHT;
+      if (y < ymin) code |= CS_TOP;
+      else if (y > ymax) code |= CS_BOTTOM;
+      return code;
+    }
+
+    function clipLine(x0, y0, x1, y1, xmin, ymin, xmax, ymax) {
+      var code0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+      var code1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+      var accept = false;
+
+      while (true) {
+        if (!(code0 | code1)) {
+          accept = true;
+          break;
+        } else if (code0 & code1) {
+          break;
+        } else {
+          var x, y;
+          var outcodeOut = code0 ? code0 : code1;
+          if (outcodeOut & CS_BOTTOM) {
+            x = x0 + (x1 - x0) * (ymax - y0) / (y1 - y0);
+            y = ymax;
+          } else if (outcodeOut & CS_TOP) {
+            x = x0 + (x1 - x0) * (ymin - y0) / (y1 - y0);
+            y = ymin;
+          } else if (outcodeOut & CS_RIGHT) {
+            y = y0 + (y1 - y0) * (xmax - x0) / (x1 - x0);
+            x = xmax;
+          } else if (outcodeOut & CS_LEFT) {
+            y = y0 + (y1 - y0) * (xmin - x0) / (x1 - x0);
+            x = xmin;
+          }
+
+          if (outcodeOut === code0) {
+            x0 = x; y0 = y;
+            code0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+          } else {
+            x1 = x; y1 = y;
+            code1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+          }
+        }
+      }
+      return accept ? [x0, y0, x1, y1] : null;
+    }
+
     function drawRouteCanvas() {
       var canvas = document.getElementById('route-canvas');
       if (!canvas || !map) return;
@@ -202,16 +252,35 @@ export function getMapHtmlContent(): string {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (!activeLineCoords || activeLineCoords.length < 2) return;
 
-      var pts = [];
+      var margin = 60;
+      var xmin = -margin, ymin = -margin;
+      var xmax = canvas.width + margin, ymax = canvas.height + margin;
+
+      var projected = [];
       for (var i = 0; i < activeLineCoords.length; i++) {
         try {
           var p = map.project(activeLineCoords[i]);
-          if (p && !isNaN(p.x) && !isNaN(p.y)) {
-            pts.push(p);
-          }
-        } catch(e) {}
+          projected.push(p);
+        } catch(e) {
+          projected.push(null);
+        }
       }
-      if (pts.length < 2) return;
+
+      var segments = [];
+      for (var j = 0; j < projected.length - 1; j++) {
+        var p1 = projected[j];
+        var p2 = projected[j + 1];
+        if (!p1 || !p2 || isNaN(p1.x) || isNaN(p1.y) || isNaN(p2.x) || isNaN(p2.y)) continue;
+        // Discard any extreme projection anomalies from points behind 3D camera horizon
+        if (Math.abs(p1.x) > 40000 || Math.abs(p1.y) > 40000 || Math.abs(p2.x) > 40000 || Math.abs(p2.y) > 40000) continue;
+
+        var clipped = clipLine(p1.x, p1.y, p2.x, p2.y, xmin, ymin, xmax, ymax);
+        if (clipped) {
+          segments.push(clipped);
+        }
+      }
+
+      if (segments.length === 0) return;
 
       // 1. Dark contrast casing
       ctx.beginPath();
@@ -219,8 +288,10 @@ export function getMapHtmlContent(): string {
       ctx.lineWidth = 10;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+      for (var s = 0; s < segments.length; s++) {
+        ctx.moveTo(segments[s][0], segments[s][1]);
+        ctx.lineTo(segments[s][2], segments[s][3]);
+      }
       ctx.stroke();
 
       // 2. Luminous Emerald ribbon
@@ -229,8 +300,10 @@ export function getMapHtmlContent(): string {
       ctx.lineWidth = 6;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (var k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+      for (var e = 0; e < segments.length; e++) {
+        ctx.moveTo(segments[e][0], segments[e][1]);
+        ctx.lineTo(segments[e][2], segments[e][3]);
+      }
       ctx.stroke();
 
       // 3. Cyber Cyan laser core
@@ -239,8 +312,10 @@ export function getMapHtmlContent(): string {
       ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (var m = 1; m < pts.length; m++) ctx.lineTo(pts[m].x, pts[m].y);
+      for (var c = 0; c < segments.length; c++) {
+        ctx.moveTo(segments[c][0], segments[c][1]);
+        ctx.lineTo(segments[c][2], segments[c][3]);
+      }
       ctx.stroke();
     }
 
@@ -593,8 +668,8 @@ export function getMapHtmlContent(): string {
         if (routeCache[cacheKey]) {
           applyRouteCoordinates(routeCache[cacheKey], true);
         } else {
-          // Query OSRM Driving Road Network to snap directly along actual Kolkata streets
-          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=simplified&geometries=geojson';
+          // Query OSRM Driving Road Network to snap directly along actual Kolkata streets with full road curvature
+          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
           fetch(osrmUrl)
             .then(function(res) { return res.json(); })
             .then(function(resData) {
