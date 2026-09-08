@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, Pressable, Platform, ScrollView, Touchab
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
+import { CameraApi } from '../../data/api/CameraApi';
 
 type Props = {
   camera: Camera | null;
@@ -13,6 +14,8 @@ type Props = {
 export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
+  const [isDetecting, setIsDetecting] = React.useState(false);
+  const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!visible || !camera) return;
@@ -23,6 +26,25 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
   }, [visible, camera]);
 
   if (!camera || !visible) return null;
+
+  const handleTriggerDetection = async () => {
+    if (!camera) return;
+    setIsDetecting(true);
+    try {
+      await CameraApi.dispatchDetection({
+        cameraId: camera.id,
+        plateNumber: 'WB02AB1234',
+        vehicleType: 'car',
+        color: 'White',
+      });
+      setDetectedNotice(`Vehicle WB02AB1234 detected at ${camera.name}! Route updated.`);
+      setTimeout(() => setDetectedNotice(null), 4000);
+    } catch (err) {
+      console.error('Failed to dispatch detection:', err);
+    } finally {
+      setIsDetecting(false);
+    }
+  };
 
   const isOnline = camera.status === 'online';
 
@@ -102,7 +124,7 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
             Platform.OS === 'web' ? (
               React.createElement('video', {
                 key: camera.id,
-                src: camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4',
+                src: camera.streamUrl || camera.stream_url || (camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4'),
                 autoPlay: true,
                 loop: true,
                 muted: true,
@@ -132,6 +154,7 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
               {/* Overlay Top Left: Camera ID & FPS */}
               <View style={styles.feedOverlayCamId}>
                 <Text style={styles.feedOverlayCamText}>{camera.id}</Text>
+                {camera.direction ? <Text style={styles.feedOverlayFpsText}>• {camera.direction}</Text> : null}
                 <Text style={styles.feedOverlayFpsText}>• {camera.fps} FPS</Text>
               </View>
 
@@ -148,6 +171,25 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
             </>
           )}
         </View>
+
+        {/* AI Detection Trigger & Live Feedback */}
+        {detectedNotice ? (
+          <View style={[styles.detectedNoticeBox, { backgroundColor: colors.accentGreen + '20', borderColor: colors.accentGreen }]}>
+            <Ionicons name="checkmark-circle" size={18} color={colors.accentGreen} />
+            <Text style={[styles.detectedNoticeText, { color: colors.text }]}>{detectedNotice}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.startFeedBtn, { backgroundColor: colors.accent }]}
+            onPress={handleTriggerDetection}
+            disabled={isDetecting}
+          >
+            <Ionicons name="scan-circle-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={styles.startFeedBtnText}>
+              {isDetecting ? 'Running AI Detection...' : 'Start Feed & Detect Vehicle (WB02AB1234)'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Traffic Level Banner */}
         <View style={[styles.trafficBanner, { backgroundColor: colors.surfaceLight, borderColor: trafficColor }]}>
@@ -446,5 +488,34 @@ const styles = StyleSheet.create({
   locationCoords: {
     fontSize: 10,
     marginTop: 1,
+  },
+  detectedNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 12,
+  },
+  detectedNoticeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+  startFeedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  startFeedBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

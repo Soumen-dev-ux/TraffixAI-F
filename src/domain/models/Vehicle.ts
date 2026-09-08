@@ -16,4 +16,5 @@ export type Vehicle = {
   latitude: number;
   longitude: number;
   detectedAt: string;
+  speed?: number;
 };

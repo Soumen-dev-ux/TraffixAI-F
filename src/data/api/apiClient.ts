@@ -62,7 +62,7 @@ class ApiClient {
     }
   }
 
-  public async post<T, R>(endpoint: string, body: T): Promise<{ data: R | null; isLive: boolean }> {
+  public async post<T = any, R = any>(endpoint: string, body?: T): Promise<{ data: R | null; isLive: boolean }> {
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
     try {
       const controller = new AbortController();
@@ -72,7 +72,32 @@ class ApiClient {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+
+      if (response.ok) {
+        const json = await response.json();
+        const payload = json.data !== undefined ? json.data : json;
+        return { data: payload as R, isLive: true };
+      }
+      return { data: null, isLive: false };
+    } catch (err) {
+      return { data: null, isLive: false };
+    }
+  }
+
+  public async delete<R = any>(endpoint: string): Promise<{ data: R | null; isLive: boolean }> {
+    const url = `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), this.timeoutMs);
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         signal: controller.signal,
       });
       clearTimeout(id);

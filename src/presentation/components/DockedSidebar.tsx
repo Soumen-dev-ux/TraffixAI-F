@@ -40,6 +40,9 @@ type Props = {
   onSelectQuickVehicle?: (plate: string) => void;
   onToggleCollapse?: () => void;
   liveDetections?: { id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[];
+  onOpenAddCamera?: () => void;
+  onDeleteCamera?: (cameraId: string) => void;
+  onResetCameras?: (mode: 'clear' | 'reset') => void;
 };
 
 const formatDisplayTime = (timeVal?: string | null) => {
@@ -76,6 +79,9 @@ export const DockedSidebar: React.FC<Props> = ({
   onSelectQuickVehicle,
   onToggleCollapse,
   liveDetections = [],
+  onOpenAddCamera,
+  onDeleteCamera,
+  onResetCameras,
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
@@ -269,6 +275,38 @@ export const DockedSidebar: React.FC<Props> = ({
         {/* TAB 1: CAMERAS LIST */}
         {activeTab === 'cameras' && (
           <View style={styles.tabContentContainer}>
+            {/* Camera Actions Bar */}
+            <View style={styles.cameraActionBar}>
+              <TouchableOpacity
+                style={[styles.addCamBtn, { backgroundColor: colors.accent }]}
+                onPress={onOpenAddCamera}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.addCamBtnText}>Add Camera</Text>
+              </TouchableOpacity>
+
+              <View style={styles.camResetGroup}>
+                <TouchableOpacity
+                  style={[styles.resetCamBtn, { borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
+                  onPress={() => onResetCameras?.('clear')}
+                  accessibilityLabel="Clear all cameras to start fresh"
+                >
+                  <Ionicons name="trash-outline" size={13} color={colors.accentRed} style={{ marginRight: 4 }} />
+                  <Text style={[styles.resetCamText, { color: colors.accentRed }]}>Clear</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.resetCamBtn, { borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
+                  onPress={() => onResetCameras?.('reset')}
+                  accessibilityLabel="Restore default Kolkata junction cameras"
+                >
+                  <Ionicons name="refresh-outline" size={13} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.resetCamText, { color: colors.textSecondary }]}>Reset</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* Filter Chips */}
             <View style={styles.filterRow}>
               {(['all', 'online', 'high'] as FilterType[]).map((f) => {
@@ -293,42 +331,78 @@ export const DockedSidebar: React.FC<Props> = ({
 
             {/* Cameras ScrollView */}
             <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
-              {filteredCameras.map((camera) => {
-                const isSelected = selectedCamera?.id === camera.id;
-                const isOnline = camera.status === 'online';
-                const trafficColor = getTrafficColor(camera.trafficLevel);
-
-                return (
+              {filteredCameras.length === 0 ? (
+                <View style={[styles.emptyCameraState, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+                  <Ionicons name="videocam-off-outline" size={36} color={colors.textMuted} />
+                  <Text style={[styles.emptyCameraTitle, { color: colors.text }]}>No Cameras Deployed</Text>
+                  <Text style={[styles.emptyCameraSub, { color: colors.textMuted }]}>
+                    Click "+ Add Camera" to deploy a camera node by coordinates and assign video footage.
+                  </Text>
                   <TouchableOpacity
-                    key={camera.id}
-                    style={[
-                      styles.cameraCard,
-                      {
-                        backgroundColor: isSelected ? colors.surfaceLight : colors.surface,
-                        borderColor: isSelected ? colors.accent : colors.border,
-                      },
-                    ]}
-                    onPress={() => onCameraPress(camera)}
-                    activeOpacity={0.7}
+                    style={[styles.addFirstCamBtn, { backgroundColor: colors.accent }]}
+                    onPress={onOpenAddCamera}
                   >
-                    <View style={[styles.statusIndicator, { backgroundColor: isOnline ? colors.accentGreen : colors.accentRed }]} />
-                    <View style={styles.cameraCardBody}>
-                      <Text style={[styles.cameraNameText, { color: colors.text }]} numberOfLines={1}>
-                        {camera.name}
-                      </Text>
-                      <View style={styles.cameraMetaRow}>
-                        <Text style={[styles.cameraVehicleCount, { color: colors.textSecondary }]}>
-                          {camera.vehicleCount} vehicles
-                        </Text>
-                        <Text style={[styles.trafficTag, { color: trafficColor }]}>
-                          • {camera.trafficLevel.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={isSelected ? colors.accent : colors.textMuted} />
+                    <Ionicons name="add" size={16} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.addFirstCamBtnText}>Deploy First Camera</Text>
                   </TouchableOpacity>
-                );
-              })}
+                </View>
+              ) : (
+                filteredCameras.map((camera) => {
+                  const isSelected = selectedCamera?.id === camera.id;
+                  const isOnline = camera.status === 'online';
+                  const trafficColor = getTrafficColor(camera.trafficLevel);
+
+                  return (
+                    <TouchableOpacity
+                      key={camera.id}
+                      style={[
+                        styles.cameraCard,
+                        {
+                          backgroundColor: isSelected ? colors.surfaceLight : colors.surface,
+                          borderColor: isSelected ? colors.accent : colors.border,
+                        },
+                      ]}
+                      onPress={() => onCameraPress(camera)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.statusIndicator, { backgroundColor: isOnline ? colors.accentGreen : colors.accentRed }]} />
+                      <View style={styles.cameraCardBody}>
+                        <Text style={[styles.cameraNameText, { color: colors.text }]} numberOfLines={1}>
+                          {camera.name}
+                        </Text>
+                        <View style={styles.cameraMetaRow}>
+                          <Text style={[styles.cameraVehicleCount, { color: colors.textSecondary }]}>
+                            {camera.vehicleCount} veh
+                          </Text>
+                          {camera.direction ? (
+                            <Text style={[styles.dirTag, { color: colors.accent }]}>
+                              • {camera.direction}
+                            </Text>
+                          ) : null}
+                          <Text style={[styles.trafficTag, { color: trafficColor }]}>
+                            • {camera.trafficLevel.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {onDeleteCamera && (
+                        <TouchableOpacity
+                          style={styles.deleteCamBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            onDeleteCamera(camera.id);
+                          }}
+                          hitSlop={6}
+                        >
+                          <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      )}
+
+                      <Ionicons name="chevron-forward" size={18} color={isSelected ? colors.accent : colors.textMuted} />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </ScrollView>
           </View>
         )}
@@ -1158,6 +1232,86 @@ const styles = StyleSheet.create({
   alertActionBtnText: {
     color: '#ffffff',
     fontSize: 11,
+    fontWeight: '700',
+  },
+  cameraActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: 8,
+  },
+  addCamBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  addCamBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  camResetGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  resetCamBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  resetCamText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dirTag: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  deleteCamBtn: {
+    padding: 6,
+    marginRight: 4,
+  },
+  emptyCameraState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    margin: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  emptyCameraTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  emptyCameraSub: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 16,
+    maxWidth: 240,
+  },
+  addFirstCamBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 14,
+  },
+  addFirstCamBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '700',
   },
 });

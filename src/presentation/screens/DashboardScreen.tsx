@@ -8,6 +8,7 @@ import { MapControls } from "../components/MapControls";
 import { CameraPopup } from "../components/CameraPopup";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProfileModal } from "../components/ProfileModal";
+import { AddCameraModal } from "../components/AddCameraModal";
 import { useTheme } from "../theme/ThemeContext";
 
 import { HttpTrafficAnalyticsRepository } from "@/src/data/repositories/HttpTrafficAnalyticsRepository";
@@ -53,6 +54,7 @@ export default function DashboardScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showAddCamera, setShowAddCamera] = useState(false);
   const [liveDetections, setLiveDetections] = useState<{ id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[]>([]);
 
   // Realtime subscription (WebSocket with auto-fallback)
@@ -61,6 +63,44 @@ export default function DashboardScreen() {
     const useCase = new SubscribeToRealtimeUpdates(repository);
     const unsubscribe = useCase.execute((event) => {
       setLastRealtimeEvent(event);
+
+      // Camera lifecycle events from WebSocket
+      if ((event.type as any) === 'camera_added' && event.data) {
+        const newCam = event.data as any;
+        setCameras((prev) => {
+          if (prev.some((c) => c.id === newCam.id || c.id === newCam.camera_id)) return prev;
+          return [
+            ...prev,
+            {
+              ...newCam,
+              id: newCam.camera_id || newCam.id,
+              vehicleCount: newCam.vehicle_count || 0,
+              trafficLevel: newCam.traffic_level || 'low',
+              streamUrl: newCam.stream_url || '/videos/sample_traffic.mp4',
+              detectedVehicles: newCam.detected_vehicles || { car: 0, motorcycle: 0, bus: 0, truck: 0, van: 0, taxi: 0 },
+            },
+          ];
+        });
+      }
+
+      if ((event.type as any) === 'camera_deleted' && event.data) {
+        const delId = (event.data as any).camera_id;
+        setCameras((prev) => prev.filter((c) => c.id !== delId));
+      }
+
+      if ((event.type as any) === 'cameras_reset' && event.data) {
+        const newCams = (event.data as any).cameras || [];
+        setCameras(
+          newCams.map((c: any) => ({
+            ...c,
+            id: c.camera_id || c.id,
+            vehicleCount: c.vehicle_count || 0,
+            trafficLevel: c.traffic_level || 'low',
+            streamUrl: c.stream_url || '/videos/sample_traffic.mp4',
+            detectedVehicles: c.detected_vehicles || { car: 0, motorcycle: 0, bus: 0, truck: 0, van: 0, taxi: 0 },
+          }))
+        );
+      }
 
       if (event.type === 'vehicle_detection' && event.data) {
         const d = event.data as any;
@@ -106,11 +146,77 @@ export default function DashboardScreen() {
             },
             ...prev.filter((p) => p.plateNumber !== plate).slice(0, 19),
           ]);
+
+          // 4. Automatically position car on map & render multi-camera trajectory route
+          const newVehicle: Vehicle = {
+            id: d.vehicleId || `VH_${plate}`,
+            plateNumber: plate,
+            vehicleType: vType,
+            color: d.color || 'White',
+            latitude: Number(d.latitude || 22.5535),
+            longitude: Number(d.longitude || 88.3525),
+            cameraId: camId,
+            cameraName: camName,
+            detectedAt,
+            speed: d.speed || 45,
+          };
+          setVehicle(newVehicle);
+
+          if (d.trajectory && Array.isArray(d.trajectory.detections) && d.trajectory.detections.length > 0) {
+            setTrajectory(d.trajectory);
+          } else {
+            setTrajectory((prevTraj) => {
+              const prevPoints = prevTraj && prevTraj.plateNumber === plate ? prevTraj.detections : [];
+              const newPoint = {
+                id: `DET_${Date.now()}`,
+                cameraId: camId,
+                cameraName: camName,
+                latitude: newVehicle.latitude,
+                longitude: newVehicle.longitude,
+                detectedAt,
+              };
+              return {
+                vehicleId: newVehicle.id,
+                plateNumber: plate,
+                vehicleType: vType,
+                detections: [...prevPoints.filter((p) => p.cameraId !== camId), newPoint],
+              };
+            });
+          }
         }
       }
     });
     return unsubscribe;
   }, []);
+
+  const handleAddCamera = async (camData: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    direction: string;
+    stream_url: string;
+  }) => {
+    const created = await CameraApi.createCamera(camData);
+    setCameras((prev) => {
+      if (prev.some((c) => c.id === created.id)) return prev;
+      return [...prev, created];
+    });
+    setSelectedCamera(created);
+  };
+
+  const handleDeleteCamera = async (cameraId: string) => {
+    await CameraApi.deleteCamera(cameraId);
+    setCameras((prev) => prev.filter((c) => c.id !== cameraId));
+    if (selectedCamera?.id === cameraId) {
+      setSelectedCamera(null);
+    }
+  };
+
+  const handleResetCameras = async (mode: 'clear' | 'reset') => {
+    const updated = await CameraApi.resetCameras(mode);
+    setCameras(updated);
+    setSelectedCamera(null);
+  };
 
   // Analytics data
   useEffect(() => {
@@ -227,6 +333,9 @@ export default function DashboardScreen() {
           }}
           onToggleCollapse={() => setShowSidebar(false)}
           liveDetections={liveDetections}
+          onOpenAddCamera={() => setShowAddCamera(true)}
+          onDeleteCamera={handleDeleteCamera}
+          onResetCameras={handleResetCameras}
         />
       )}
 
@@ -294,6 +403,13 @@ export default function DashboardScreen() {
       <ProfileModal
         visible={showProfile}
         onClose={() => setShowProfile(false)}
+      />
+
+      {/* Deploy Camera Modal */}
+      <AddCameraModal
+        visible={showAddCamera}
+        onClose={() => setShowAddCamera(false)}
+        onAddCamera={handleAddCamera}
       />
     </View>
   );

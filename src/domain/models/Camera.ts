@@ -22,4 +22,8 @@ export type Camera = {
     van: number;
     taxi: number;
   };
+
+  direction?: string;
+  streamUrl?: string;
+  stream_url?: string;
 };
