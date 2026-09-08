@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
@@ -13,10 +13,10 @@ type Props = {
 export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
   const { colors } = useTheme();
 
-  if (!camera) return null;
+  if (!camera || !visible) return null;
 
   const isOnline = camera.status === 'online';
-  
+
   const getTrafficColor = (level: string) => {
     switch (level) {
       case 'low': return colors.accentGreen;
@@ -30,136 +30,145 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
   const trafficColor = getTrafficColor(camera.trafficLevel);
 
   const vehicleIcons = {
-    car: <Ionicons name="car" size={20} color={colors.text} />,
-    motorcycle: <MaterialCommunityIcons name="motorbike" size={20} color={colors.text} />,
-    bus: <Ionicons name="bus" size={20} color={colors.text} />,
-    truck: <MaterialCommunityIcons name="truck" size={20} color={colors.text} />,
-    van: <Ionicons name="car" size={20} color={colors.text} />,
-    taxi: <Ionicons name="car" size={20} color={colors.text} />
+    car: <Ionicons name="car" size={18} color={colors.accent} />,
+    motorcycle: <MaterialCommunityIcons name="motorbike" size={18} color={colors.accent} />,
+    bus: <Ionicons name="bus" size={18} color={colors.accent} />,
+    truck: <MaterialCommunityIcons name="truck" size={18} color={colors.accent} />,
+    van: <Ionicons name="car" size={18} color={colors.accent} />,
+    taxi: <Ionicons name="car" size={18} color={colors.accent} />,
   };
+
+  const cardContent = (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+        Platform.OS === 'web' ? styles.cardWeb : styles.cardMobile,
+      ]}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.accentGreen : colors.accentRed }]} />
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {camera.name}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.closeButton, { backgroundColor: colors.surfaceLight }]}
+          onPress={onClose}
+          hitSlop={8}
+        >
+          <Ionicons name="close" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollBody}>
+        {/* Status & Metrics Strip */}
+        <View style={[styles.statusRow, { borderBottomColor: colors.border, backgroundColor: colors.surfaceLight }]}>
+          <View style={styles.statusCol}>
+            <Text style={[styles.statusLabel, { color: colors.textMuted }]}>STATUS</Text>
+            <Text style={[styles.statusText, { color: isOnline ? colors.accentGreen : colors.accentRed }]}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+          </View>
+
+          <View style={styles.statusCol}>
+            <Text style={[styles.statusLabel, { color: colors.textMuted }]}>FRAME RATE</Text>
+            <Text style={[styles.statusText, { color: colors.text }]}>{camera.fps} FPS</Text>
+          </View>
+
+          <View style={styles.statusCol}>
+            <Text style={[styles.statusLabel, { color: colors.textMuted }]}>COUNT</Text>
+            <Text style={[styles.statusText, { color: colors.accent }]}>{camera.vehicleCount} veh</Text>
+          </View>
+        </View>
+
+        {/* Video Feed Placeholder */}
+        <View style={[styles.feedContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <Ionicons
+            name="videocam"
+            size={36}
+            color={isOnline ? colors.accent : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.feedText,
+              { color: isOnline ? colors.accent : colors.textMuted },
+            ]}
+          >
+            {isOnline ? 'LIVE ANPR STREAM' : 'FEED OFFLINE'}
+          </Text>
+
+          {isOnline && (
+            <View style={[styles.liveBadge, { backgroundColor: colors.surface }]}>
+              <View style={[styles.pulseDot, { backgroundColor: colors.accentGreen }]} />
+              <Text style={[styles.liveText, { color: colors.accentGreen }]}>LIVE</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Traffic Level Banner */}
+        <View style={[styles.trafficBanner, { backgroundColor: colors.surfaceLight, borderColor: trafficColor }]}>
+          <View style={[styles.trafficLevelDot, { backgroundColor: trafficColor }]} />
+          <Text style={[styles.trafficLevelText, { color: colors.text }]}>
+            {camera.trafficLevel.toUpperCase()} TRAFFIC DENSITY
+          </Text>
+        </View>
+
+        {/* Detected Vehicles Grid */}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DETECTED VEHICLES</Text>
+        <View style={styles.vehiclesGrid}>
+          {Object.entries(camera.detectedVehicles).map(([type, count]) => {
+            if (count === 0) return null;
+            const icon = vehicleIcons[type as keyof typeof vehicleIcons] || vehicleIcons.car;
+
+            return (
+              <View
+                key={type}
+                style={[styles.vehicleCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
+              >
+                {icon}
+                <View style={styles.vehicleCardText}>
+                  <Text style={[styles.vehicleCount, { color: colors.text }]}>{count}</Text>
+                  <Text style={[styles.vehicleType, { color: colors.textMuted }]}>{type}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Coordinates Location */}
+        <View style={[styles.locationContainer, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+          <Ionicons name="location" size={18} color={colors.accent} />
+          <View style={styles.locationTextContainer}>
+            <Text style={[styles.locationName, { color: colors.text }]}>{camera.name}</Text>
+            <Text style={[styles.locationCoords, { color: colors.textSecondary }]}>
+              {camera.latitude.toFixed(5)}°N, {camera.longitude.toFixed(5)}°E
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+
+  if (Platform.OS === 'web') {
+    return cardContent;
+  }
 
   return (
     <Modal
       transparent={true}
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        
-        <View style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-          Platform.OS === 'web' ? styles.cardWeb : styles.cardMobile
-        ]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-              {camera.name}
-            </Text>
-            <Pressable 
-              style={[styles.closeButton, { backgroundColor: colors.surfaceLight }]}
-              onPress={onClose}
-            >
-              <Ionicons name="close" size={20} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Status Row */}
-            <View style={[styles.statusRow, { borderBottomColor: colors.border }]}>
-              <View style={styles.statusCol}>
-                <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Status</Text>
-                <View style={styles.statusValueContainer}>
-                  <View style={[
-                    styles.statusDot, 
-                    { backgroundColor: isOnline ? colors.accentGreen : colors.accentRed }
-                  ]} />
-                  <Text style={[styles.statusText, { color: colors.text }]}>
-                    {isOnline ? 'Online' : 'Offline'}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.statusCol}>
-                <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>FPS</Text>
-                <Text style={[styles.statusText, { color: colors.text }]}>{camera.fps}</Text>
-              </View>
-
-              <View style={styles.statusCol}>
-                <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Vehicles</Text>
-                <Text style={[styles.statusText, { color: colors.text }]}>{camera.vehicleCount}</Text>
-              </View>
-            </View>
-
-            {/* Video Feed Placeholder */}
-            <View style={[styles.feedContainer, { backgroundColor: colors.background }]}>
-              <Ionicons 
-                name="videocam" 
-                size={40} 
-                color={isOnline ? colors.accent : colors.textMuted} 
-              />
-              <Text style={[
-                styles.feedText, 
-                { color: isOnline ? colors.accent : colors.textMuted }
-              ]}>
-                {isOnline ? 'LIVE FEED' : 'OFFLINE'}
-              </Text>
-              
-              {isOnline && (
-                <View style={[styles.liveBadge, { backgroundColor: colors.overlay }]}>
-                  <View style={[styles.pulseDot, { backgroundColor: colors.accentGreen }]} />
-                  <Text style={styles.liveText}>LIVE</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Traffic Level */}
-            <View style={styles.trafficLevelContainer}>
-              <View style={[styles.trafficLevelDot, { backgroundColor: trafficColor }]} />
-              <Text style={[styles.trafficLevelText, { color: colors.text }]}>
-                {camera.trafficLevel.toUpperCase()} TRAFFIC
-              </Text>
-            </View>
-
-            {/* Detected Vehicles */}
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Detected Vehicles</Text>
-            <View style={styles.vehiclesGrid}>
-              {Object.entries(camera.detectedVehicles).map(([type, count]) => {
-                if (count === 0) return null;
-                const icon = vehicleIcons[type as keyof typeof vehicleIcons] || vehicleIcons.car;
-                
-                return (
-                  <View 
-                    key={type} 
-                    style={[styles.vehicleCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
-                  >
-                    {icon}
-                    <View style={styles.vehicleCardText}>
-                      <Text style={[styles.vehicleCount, { color: colors.text }]}>{count}</Text>
-                      <Text style={[styles.vehicleType, { color: colors.textSecondary }]}>{type}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Location */}
-            <View style={[styles.locationContainer, { backgroundColor: colors.surfaceLight }]}>
-              <Ionicons name="location" size={20} color={colors.textSecondary} />
-              <View style={styles.locationTextContainer}>
-                <Text style={[styles.locationName, { color: colors.text }]}>{camera.name}</Text>
-                <Text style={[styles.locationCoords, { color: colors.textSecondary }]}>
-                  {camera.latitude.toFixed(4)}, {camera.longitude.toFixed(4)}
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
+        {cardContent}
       </View>
     </Modal>
   );
@@ -168,30 +177,30 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
   card: {
     borderRadius: 16,
     borderWidth: 1,
-    padding: 20,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
     elevation: 8,
-    maxHeight: '85%',
   },
   cardWeb: {
     position: 'absolute',
-    top: 80,
+    top: 58,
     right: 16,
-    width: 380,
+    width: 350,
+    maxHeight: '80%',
+    zIndex: 40,
   },
   cardMobile: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
+    maxHeight: '80%',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
@@ -199,147 +208,161 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
     flex: 1,
-    marginRight: 16,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scrollBody: {
+    maxHeight: 480,
   },
   statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 12,
   },
   statusCol: {
-    flex: 1,
+    alignItems: 'center',
   },
   statusLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  statusValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
   },
   statusText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   feedContainer: {
-    height: 140,
-    borderRadius: 12,
+    height: 120,
+    borderRadius: 10,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    overflow: 'hidden',
+    marginBottom: 12,
+    position: 'relative',
   },
   feedText: {
-    marginTop: 8,
     fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    fontWeight: '700',
+    marginTop: 6,
+    letterSpacing: 0.8,
   },
   liveBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 5,
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 4,
   },
   liveText: {
-    color: '#FFF',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
-  trafficLevelContainer: {
+  trafficBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    marginBottom: 12,
+    gap: 8,
   },
   trafficLevelDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   trafficLevelText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   vehiclesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
+    gap: 6,
+    marginBottom: 12,
   },
   vehicleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    width: '48%',
+    minWidth: 80,
+    gap: 6,
   },
   vehicleCardText: {
-    marginLeft: 10,
+    justifyContent: 'center',
   },
   vehicleCount: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '700',
   },
   vehicleType: {
-    fontSize: 12,
+    fontSize: 9,
     textTransform: 'capitalize',
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 4,
   },
   locationTextContainer: {
-    marginLeft: 12,
     flex: 1,
   },
   locationName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
   },
   locationCoords: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 10,
+    marginTop: 1,
   },
 });

@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import CityMap from "../components/CityMap";
-import { TopBar } from "../components/TopBar";
-import { CameraSidebar } from "../components/CameraSidebar";
+import { DockedSidebar } from "../components/DockedSidebar";
+import { MapControls } from "../components/MapControls";
 import { CameraPopup } from "../components/CameraPopup";
-import { VehiclePopup } from "../components/VehiclePopup";
-import { StatsBar } from "../components/StatsBar";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProfileModal } from "../components/ProfileModal";
 import { useTheme } from "../theme/ThemeContext";
@@ -41,13 +39,13 @@ export default function DashboardScreen() {
   const [vehicleLoading, setVehicleLoading] = useState(false);
   const [vehicleError, setVehicleError] = useState("");
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
-  const [showVehiclePopup, setShowVehiclePopup] = useState(false);
 
   // Analytics & Realtime
   const [analytics, setAnalytics] = useState<TrafficAnalytics | null>(null);
-  const [lastRealtimeEvent, setLastRealtimeEvent] = useState<RealtimeEvent | null>(null);
+  const [, setLastRealtimeEvent] = useState<RealtimeEvent | null>(null);
 
-  // UI options & overlays
+  // Navigation & UI state
+  const [activeTab, setActiveTab] = useState<'cameras' | 'tracking' | 'analytics'>('cameras');
   const [is3DView, setIs3DView] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -59,7 +57,6 @@ export default function DashboardScreen() {
     const repository = new MockRealtimeRepository();
     const useCase = new SubscribeToRealtimeUpdates(repository);
     const unsubscribe = useCase.execute((event) => {
-      console.log("Realtime event:", event);
       setLastRealtimeEvent(event);
     });
     return unsubscribe;
@@ -88,8 +85,9 @@ export default function DashboardScreen() {
   }, []);
 
   // Vehicle Search
-  const handleVehicleSearch = async () => {
-    if (!searchText.trim()) {
+  const executeVehicleSearch = async (plateNumber: string) => {
+    const target = plateNumber.trim();
+    if (!target) {
       setVehicleError("Enter a vehicle number (e.g. WB12AB1234)");
       return;
     }
@@ -101,14 +99,14 @@ export default function DashboardScreen() {
     try {
       const repository = new MockVehicleRepository();
       const searchVehicle = new SearchVehicle(repository);
-      const result = await searchVehicle.execute(searchText);
+      const result = await searchVehicle.execute(target);
 
       if (result) {
         setVehicle(result);
 
         const trajectoryRepository = new MockVehicleTrajectoryRepository();
         const getVehicleTrajectory = new GetVehicleTrajectory(trajectoryRepository);
-        const trajectoryResult = await getVehicleTrajectory.execute(searchText);
+        const trajectoryResult = await getVehicleTrajectory.execute(target);
 
         setTrajectory(trajectoryResult);
 
@@ -123,11 +121,10 @@ export default function DashboardScreen() {
             detectedAt: latest.detectedAt,
           });
         }
-        setShowVehiclePopup(true);
+        setActiveTab('tracking');
       } else {
         setVehicle(null);
         setTrajectory(null);
-        setShowVehiclePopup(false);
         setVehicleError("Vehicle not found. Try searching 'WB12AB1234' or 'WB06CD5678'");
       }
     } catch (error) {
@@ -142,85 +139,95 @@ export default function DashboardScreen() {
     setSelectedCamera(camera);
   };
 
+  const handleClearVehicle = () => {
+    setVehicle(null);
+    setTrajectory(null);
+    setSearchText("");
+    setVehicleError("");
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Full-screen Background Map */}
-      <CityMap
-        cameras={cameras}
-        vehicle={vehicle}
-        trajectory={trajectory}
-        onCameraPress={handleCameraPress}
-        is3DView={is3DView}
-        showHeatmap={showHeatmap}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Floating Top Bar (Brand, Search, Controls) */}
-      <TopBar
-        searchText={searchText}
-        onSearchTextChange={(text) => {
-          setSearchText(text);
-          if (vehicleError) setVehicleError("");
-        }}
-        onSearch={handleVehicleSearch}
-        searchLoading={vehicleLoading}
-        onSettingsPress={() => setShowSettings(true)}
-        onProfilePress={() => setShowProfile(true)}
-      />
-
-      {/* Search Error Floating Toast */}
-      {vehicleError ? (
-        <View style={[styles.errorToast, { backgroundColor: colors.surface, borderColor: colors.accentRed }]}>
-          <Ionicons name="alert-circle" size={18} color={colors.accentRed} />
-          <Text style={[styles.errorText, { color: colors.text }]}>{vehicleError}</Text>
-          <TouchableOpacity onPress={() => setVehicleError("")} hitSlop={10}>
-            <Ionicons name="close" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {/* Left Sidebar Camera List (Overlay) */}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* 1. Left Docked Solid Sidebar */}
       {showSidebar && (
-        <CameraSidebar
+        <DockedSidebar
           cameras={cameras}
+          selectedCamera={selectedCamera}
           onCameraPress={handleCameraPress}
-          selectedCameraId={selectedCamera?.id ?? null}
+          searchText={searchText}
+          onSearchTextChange={(text) => {
+            setSearchText(text);
+            if (vehicleError) setVehicleError("");
+          }}
+          onSearch={() => executeVehicleSearch(searchText)}
+          searchLoading={vehicleLoading}
+          vehicleError={vehicleError}
+          onClearVehicleError={() => setVehicleError("")}
+          vehicle={vehicle}
+          trajectory={trajectory}
+          onClearVehicle={handleClearVehicle}
+          analytics={analytics}
+          onSettingsPress={() => setShowSettings(true)}
+          onProfilePress={() => setShowProfile(true)}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onSelectQuickVehicle={(plate) => {
+            setSearchText(plate);
+            executeVehicleSearch(plate);
+          }}
+          onToggleCollapse={() => setShowSidebar(false)}
         />
       )}
 
-      {/* Floating Toggle for Sidebar */}
-      <TouchableOpacity
-        style={[
-          styles.sidebarToggleBtn,
-          { backgroundColor: colors.overlay, borderColor: colors.border },
-        ]}
-        onPress={() => setShowSidebar(!showSidebar)}
-        activeOpacity={0.8}
-      >
-        <Ionicons
-          name={showSidebar ? "chevron-back" : "videocam-outline"}
-          size={18}
-          color={colors.text}
+      {/* 2. Map Container (Fills remainder of the screen) */}
+      <View style={styles.mapArea}>
+        <CityMap
+          cameras={cameras}
+          vehicle={vehicle}
+          trajectory={trajectory}
+          onCameraPress={handleCameraPress}
+          is3DView={is3DView}
+          showHeatmap={showHeatmap}
+          style={StyleSheet.absoluteFill}
         />
-      </TouchableOpacity>
 
-      {/* Bottom Right Floating Stats Strip */}
-      <StatsBar cameraCount={cameras.length} analytics={analytics} />
+        {/* Floating Expand Button (Visible when sidebar is collapsed) */}
+        {!showSidebar && (
+          <TouchableOpacity
+            style={[
+              styles.sidebarExpandBtn,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={() => setShowSidebar(true)}
+            activeOpacity={0.8}
+            accessibilityLabel="Expand Sidebar"
+          >
+            <Ionicons
+              name="menu"
+              size={20}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+        )}
 
-      {/* Floating Camera Detail Modal/Card */}
-      <CameraPopup
-        camera={selectedCamera}
-        visible={!!selectedCamera}
-        onClose={() => setSelectedCamera(null)}
-      />
+        {/* Floating Solid Map Controls (Top Right: 3D toggle, Heatmap toggle) */}
+        <MapControls
+          is3DView={is3DView}
+          onToggle3D={() => setIs3DView(!is3DView)}
+          showHeatmap={showHeatmap}
+          onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
+        />
 
-      {/* Floating Vehicle Detail Modal/Card */}
-      <VehiclePopup
-        vehicle={vehicle}
-        trajectory={trajectory}
-        visible={showVehiclePopup && !!vehicle}
-        onClose={() => setShowVehiclePopup(false)}
-      />
+        {/* Sleek Solid Camera Details Card (Anchored over map on top-right) */}
+        <CameraPopup
+          camera={selectedCamera}
+          visible={!!selectedCamera}
+          onClose={() => setSelectedCamera(null)}
+        />
+      </View>
 
       {/* Settings Modal */}
       <SettingsModal
@@ -242,50 +249,33 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     width: "100%",
     height: "100%",
+    flexDirection: "row",
     overflow: "hidden",
+  },
+  mapArea: {
+    flex: 1,
+    height: "100%",
     position: "relative",
   },
-  errorToast: {
+  sidebarExpandBtn: {
     position: "absolute",
-    top: 68,
-    alignSelf: "center",
-    zIndex: 110,
-    flexDirection: "row",
+    bottom: 20,
+    left: 16,
+    zIndex: 35,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  errorText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sidebarToggleBtn: {
-    position: "absolute",
-    left: 12,
-    bottom: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
     justifyContent: "center",
-    alignItems: "center",
-    zIndex: 60,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 6,
+    elevation: 5,
   },
 });
