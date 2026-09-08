@@ -246,11 +246,17 @@ export function getMapHtmlContent(): string {
       activeLineCoords = coords || [];
       updateTrajectorySource();
 
+      if (map) {
+        map.once('idle', function() {
+          updateTrajectorySource();
+        });
+      }
+
       if (shouldFitBounds && coords && coords.length > 1 && map) {
         try {
           var bounds = new maplibregl.LngLatBounds();
           coords.forEach(function(c) { bounds.extend(c); });
-          map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
+          map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 800 });
         } catch(e) {}
       }
     }
@@ -284,7 +290,7 @@ export function getMapHtmlContent(): string {
         },
         'kolkata-buildings': {
           type: 'geojson',
-          data: ${buildingsJson}
+          data: { type: 'FeatureCollection', features: [] }
         },
         'traffic-heat-source': {
           type: 'geojson',
@@ -310,14 +316,14 @@ export function getMapHtmlContent(): string {
           source: 'trajectory-source',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#090d16',
+            'line-color': '#050b14',
             'line-width': [
               'interpolate', ['linear'], ['zoom'],
-              11, 5,
-              14, 8,
-              17, 11
+              10, 7,
+              14, 10,
+              17, 14
             ],
-            'line-opacity': 0.85
+            'line-opacity': 0.92
           }
         },
         {
@@ -329,9 +335,9 @@ export function getMapHtmlContent(): string {
             'line-color': '#10b981',
             'line-width': [
               'interpolate', ['linear'], ['zoom'],
-              11, 3,
-              14, 5.5,
-              17, 8
+              10, 4.5,
+              14, 7,
+              17, 10
             ],
             'line-opacity': 0.95
           }
@@ -345,11 +351,27 @@ export function getMapHtmlContent(): string {
             'line-color': '#38bdf8',
             'line-width': [
               'interpolate', ['linear'], ['zoom'],
-              11, 1.2,
-              14, 2.2,
-              17, 3.5
+              10, 2,
+              14, 3.2,
+              17, 5
             ],
             'line-opacity': 1.0
+          }
+        },
+        {
+          id: 'trajectory-highlight-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 0.8,
+              14, 1.4,
+              17, 2
+            ],
+            'line-opacity': 0.95
           }
         },
         {
@@ -438,6 +460,20 @@ export function getMapHtmlContent(): string {
       postToHost({ type: 'MAP_READY' });
     }
 
+    var buildingsLoaded = false;
+    function lazyLoadBuildings() {
+      if (buildingsLoaded || !map) return;
+      var bSrc = map.getSource('kolkata-buildings');
+      if (bSrc && map.isStyleLoaded()) {
+        buildingsLoaded = true;
+        try {
+          bSrc.setData(${buildingsJson});
+        } catch(e) {
+          console.warn('Lazy buildings load error:', e);
+        }
+      }
+    }
+
     map.on('style.load', function() {
       try {
         map.setLight({
@@ -454,6 +490,7 @@ export function getMapHtmlContent(): string {
     map.on('load', function() {
       setupReady();
       updateTrajectorySource();
+      setTimeout(lazyLoadBuildings, 1200);
     });
 
     // Fallback: If style.load or load delays due to network/tile issues, initialize immediately
@@ -579,9 +616,14 @@ export function getMapHtmlContent(): string {
         }).join(';');
         currentActiveCacheKey = cacheKey;
 
+        var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
+
         if (routeCache[cacheKey]) {
           applyRouteCoordinates(routeCache[cacheKey], true);
         } else {
+          // Immediately display direct route so user NEVER sees a blank map
+          applyRouteCoordinates(directCoords, false);
+
           // Query OSRM Driving Road Network to snap directly along actual Kolkata streets with full road curvature
           var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
           fetch(osrmUrl)
@@ -598,15 +640,10 @@ export function getMapHtmlContent(): string {
                 if (currentActiveCacheKey === cacheKey) {
                   applyRouteCoordinates(roadCoords, true);
                 }
-              } else {
-                var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
-                applyRouteCoordinates(directCoords, true);
               }
             })
             .catch(function(err) {
               console.warn('OSRM road snapping fallback to direct route:', err);
-              var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
-              applyRouteCoordinates(directCoords, true);
             });
         }
       } else {
