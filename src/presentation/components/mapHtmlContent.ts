@@ -181,69 +181,10 @@ export function getMapHtmlContent(): string {
 </head>
 <body>
   <div id="map"></div>
-  <canvas id="route-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
   <script>
     var activeLineCoords = [];
     var routeCache = {};
     var currentActiveCacheKey = '';
-
-    function resizeCanvas() {
-      var canvas = document.getElementById('route-canvas');
-      if (canvas) {
-        canvas.width = document.body.clientWidth || window.innerWidth;
-        canvas.height = document.body.clientHeight || window.innerHeight;
-      }
-    }
-
-    var CS_INSIDE = 0, CS_LEFT = 1, CS_RIGHT = 2, CS_BOTTOM = 4, CS_TOP = 8;
-    function computeOutCode(x, y, xmin, ymin, xmax, ymax) {
-      var code = CS_INSIDE;
-      if (x < xmin) code |= CS_LEFT;
-      else if (x > xmax) code |= CS_RIGHT;
-      if (y < ymin) code |= CS_TOP;
-      else if (y > ymax) code |= CS_BOTTOM;
-      return code;
-    }
-
-    function clipLine(x0, y0, x1, y1, xmin, ymin, xmax, ymax) {
-      var code0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
-      var code1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
-      var accept = false;
-
-      while (true) {
-        if (!(code0 | code1)) {
-          accept = true;
-          break;
-        } else if (code0 & code1) {
-          break;
-        } else {
-          var x, y;
-          var outcodeOut = code0 ? code0 : code1;
-          if (outcodeOut & CS_BOTTOM) {
-            x = x0 + (x1 - x0) * (ymax - y0) / (y1 - y0);
-            y = ymax;
-          } else if (outcodeOut & CS_TOP) {
-            x = x0 + (x1 - x0) * (ymin - y0) / (y1 - y0);
-            y = ymin;
-          } else if (outcodeOut & CS_RIGHT) {
-            y = y0 + (y1 - y0) * (xmax - x0) / (x1 - x0);
-            x = xmax;
-          } else if (outcodeOut & CS_LEFT) {
-            y = y0 + (y1 - y0) * (xmin - x0) / (x1 - x0);
-            x = xmin;
-          }
-
-          if (outcodeOut === code0) {
-            x0 = x; y0 = y;
-            code0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
-          } else {
-            x1 = x; y1 = y;
-            code1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
-          }
-        }
-      }
-      return accept ? [x0, y0, x1, y1] : null;
-    }
 
     function perpDistSq(pt, l1, l2) {
       var dx = l2[0] - l1[0];
@@ -278,101 +219,39 @@ export function getMapHtmlContent(): string {
       }
     }
 
-    function drawRouteCanvas() {
-      var canvas = document.getElementById('route-canvas');
-      if (!canvas || !map) return;
-      var ctx = canvas.getContext('2d');
-      var W = canvas.width, H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
-      if (!activeLineCoords || activeLineCoords.length < 2) return;
-
-      var margin = 60;
-      var xmin = -margin, ymin = -margin;
-      var xmax = W + margin, ymax = H + margin;
-
-      var projected = [];
-      for (var i = 0; i < activeLineCoords.length; i++) {
+    function updateTrajectorySource() {
+      if (!map) return;
+      var src = map.getSource('trajectory-source');
+      if (src) {
         try {
-          var p = map.project(activeLineCoords[i]);
-          if (p && !isNaN(p.x) && !isNaN(p.y) && Math.abs(p.x) < 35000 && Math.abs(p.y) < 35000) {
-            projected.push(p);
-          } else {
-            projected.push(null);
-          }
+          src.setData({
+            type: 'FeatureCollection',
+            features: activeLineCoords && activeLineCoords.length > 1 ? [{
+              type: 'Feature',
+              properties: { id: 'route' },
+              geometry: {
+                type: 'LineString',
+                coordinates: activeLineCoords
+              }
+            }] : []
+          });
+          map.triggerRepaint();
         } catch(e) {
-          projected.push(null);
+          console.warn('updateTrajectorySource error:', e);
         }
       }
-
-      var path = new Path2D();
-      var hasSegments = false;
-      var lastX = -999999, lastY = -999999;
-
-      for (var j = 0; j < projected.length - 1; j++) {
-        var p1 = projected[j];
-        var p2 = projected[j + 1];
-        if (!p1 || !p2) continue;
-
-        var clipped = clipLine(p1.x, p1.y, p2.x, p2.y, xmin, ymin, xmax, ymax);
-        if (clipped) {
-          hasSegments = true;
-          // Connect smoothly if adjacent to previous segment to eliminate CPU end-cap rasterization
-          if (Math.abs(clipped[0] - lastX) < 1 && Math.abs(clipped[1] - lastY) < 1) {
-            path.lineTo(clipped[2], clipped[3]);
-          } else {
-            path.moveTo(clipped[0], clipped[1]);
-            path.lineTo(clipped[2], clipped[3]);
-          }
-          lastX = clipped[2];
-          lastY = clipped[3];
-        }
-      }
-
-      if (!hasSegments) return;
-
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // 1. Dark contrast casing (base outline)
-      ctx.strokeStyle = '#090d16';
-      ctx.lineWidth = 10;
-      ctx.stroke(path);
-
-      // 2. Luminous Emerald ribbon
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 6;
-      ctx.stroke(path);
-
-      // 3. Cyber Cyan laser core
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-      ctx.stroke(path);
     }
 
     function applyRouteCoordinates(coords, shouldFitBounds) {
       activeLineCoords = coords || [];
-      resizeCanvas();
-      drawRouteCanvas();
+      updateTrajectorySource();
 
-      var src = map && map.getSource('trajectory-source');
-      if (src) {
-        src.setData({
-          type: 'FeatureCollection',
-          features: coords && coords.length > 1 ? [{
-            type: 'Feature',
-            properties: { id: 'route' },
-            geometry: {
-              type: 'LineString',
-              coordinates: coords
-            }
-          }] : []
-        });
-      }
-
-      if (shouldFitBounds && coords && coords.length > 1) {
-        var bounds = new maplibregl.LngLatBounds();
-        coords.forEach(function(c) { bounds.extend(c); });
-        map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
+      if (shouldFitBounds && coords && coords.length > 1 && map) {
+        try {
+          var bounds = new maplibregl.LngLatBounds();
+          coords.forEach(function(c) { bounds.extend(c); });
+          map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
+        } catch(e) {}
       }
     }
     function postToHost(msg) {
@@ -424,6 +303,55 @@ export function getMapHtmlContent(): string {
           minzoom: 0,
           maxzoom: 22
         },
+        // Ground-level Native WebGL Trajectory Layers (rendered on asphalt below 3D buildings)
+        {
+          id: 'trajectory-casing-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#090d16',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              11, 5,
+              14, 8,
+              17, 11
+            ],
+            'line-opacity': 0.85
+          }
+        },
+        {
+          id: 'trajectory-glow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#10b981',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              11, 3,
+              14, 5.5,
+              17, 8
+            ],
+            'line-opacity': 0.95
+          }
+        },
+        {
+          id: 'trajectory-core-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#38bdf8',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              11, 1.2,
+              14, 2.2,
+              17, 3.5
+            ],
+            'line-opacity': 1.0
+          }
+        },
         {
           id: '3d-buildings-layer',
           type: 'fill-extrusion',
@@ -465,54 +393,6 @@ export function getMapHtmlContent(): string {
             ],
             'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
             'heatmap-opacity': 0.72
-          }
-        },
-        // Layer A: Bold Dark Contrast Casing (outer border)
-        {
-          id: 'trajectory-shadow-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#090d16',
-            'line-width': 10,
-            'line-opacity': 0.95
-          }
-        },
-        // Layer B: Luminous Emerald Glow Ribbon
-        {
-          id: 'trajectory-glow-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#10b981',
-            'line-width': 7,
-            'line-opacity': 0.95
-          }
-        },
-        // Layer C: High-Luminance Neon Mint Core
-        {
-          id: 'trajectory-line-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#34d399',
-            'line-width': 4,
-            'line-opacity': 1.0
-          }
-        },
-        // Layer D: Sharp Center Pure White Laser Line
-        {
-          id: 'trajectory-highlight-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 1.8,
-            'line-opacity': 0.95
           }
         }
       ]
@@ -568,10 +448,12 @@ export function getMapHtmlContent(): string {
         });
       } catch(e) {}
       setupReady();
+      updateTrajectorySource();
     });
 
     map.on('load', function() {
       setupReady();
+      updateTrajectorySource();
     });
 
     // Fallback: If style.load or load delays due to network/tile issues, initialize immediately
@@ -773,23 +655,6 @@ export function getMapHtmlContent(): string {
         }
       }
     }
-
-    var rAFScheduled = false;
-    function scheduleDrawRoute() {
-      if (rAFScheduled) return;
-      rAFScheduled = true;
-      requestAnimationFrame(function() {
-        rAFScheduled = false;
-        drawRouteCanvas();
-      });
-    }
-
-    map.on('move', scheduleDrawRoute);
-    map.on('zoom', scheduleDrawRoute);
-    window.addEventListener('resize', function() {
-      resizeCanvas();
-      scheduleDrawRoute();
-    });
 
     window.__traffixUpdateMap = function(data) {
       if (typeof data === 'string') {
