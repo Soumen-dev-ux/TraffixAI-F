@@ -12,16 +12,17 @@ type Props = {
 
 export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
   const { colors } = useTheme();
-
-  if (!camera || !visible) return null;
-
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
+
   React.useEffect(() => {
+    if (!visible || !camera) return;
     const interval = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString());
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [visible, camera]);
+
+  if (!camera || !visible) return null;
 
   const isOnline = camera.status === 'online';
 
