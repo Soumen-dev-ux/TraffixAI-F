@@ -203,6 +203,7 @@ export const CameraApi = {
     const payload = {
       event_id: `evt_ui_${Date.now()}`,
       camera_id: params.cameraId,
+      local_track_id: `${params.cameraId}_TRK_${Date.now()}`,
       plate_number: params.plateNumber,
       vehicle_type: params.vehicleType || 'car',
       color: params.color || 'White',
@@ -210,6 +211,6 @@ export const CameraApi = {
       vehicle_confidence: 0.98,
       bounding_box: { x1: 100, y1: 150, x2: 300, y2: 320 },
     };
-    return apiClient.post('/api/v1/events/detection', payload);
+    return apiClient.post<any, any>('/api/v1/events/detection', payload);
   },
 };
