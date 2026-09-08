@@ -53,6 +53,7 @@ export default function DashboardScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [liveDetections, setLiveDetections] = useState<{ id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[]>([]);
 
   // Realtime subscription (WebSocket with auto-fallback)
   useEffect(() => {
@@ -60,6 +61,53 @@ export default function DashboardScreen() {
     const useCase = new SubscribeToRealtimeUpdates(repository);
     const unsubscribe = useCase.execute((event) => {
       setLastRealtimeEvent(event);
+
+      if (event.type === 'vehicle_detection' && event.data) {
+        const d = event.data as any;
+        const plate = d.plateNumber || d.plate_number || d.local_track_id || d.vehicleId;
+        const camId = d.cameraId || d.camera_id;
+        const camName = d.cameraName || d.camera_name || 'Park Street Junction';
+        const detectedAt = d.timestamp || d.detectedAt || new Date().toISOString();
+        const vType = d.vehicleType || d.vehicle_type || 'car';
+
+        if (plate) {
+          // 1. Update camera vehicle count dynamically
+          setCameras((prevCams) =>
+            prevCams.map((cam) => {
+              if (cam.id === camId || cam.name === camName) {
+                const newCount = (cam.vehicleCount || 0) + 1;
+                return {
+                  ...cam,
+                  vehicleCount: newCount,
+                  trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
+                };
+              }
+              return cam;
+            })
+          );
+
+          // 2. Update analytics active vehicles dynamically
+          setAnalytics((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              totalVehicles: (prev.totalVehicles || 0) + 1,
+            };
+          });
+
+          // 3. Add to recent live detections list
+          setLiveDetections((prev) => [
+            {
+              id: event.id || String(Date.now()),
+              plateNumber: plate,
+              cameraName: camName,
+              detectedAt,
+              vehicleType: vType,
+            },
+            ...prev.filter((p) => p.plateNumber !== plate).slice(0, 19),
+          ]);
+        }
+      }
     });
     return unsubscribe;
   }, []);
@@ -178,6 +226,7 @@ export default function DashboardScreen() {
             executeVehicleSearch(plate);
           }}
           onToggleCollapse={() => setShowSidebar(false)}
+          liveDetections={liveDetections}
         />
       )}
 

@@ -1,5 +1,8 @@
 import { Vehicle } from "../../domain/models/Vehicle";
 
+const nowMs = Date.now();
+const timeAgo = (mins: number) => new Date(nowMs - mins * 60000).toISOString();
+
 const dummyVehicles: Vehicle[] = [
   {
     id: "VH_001",
@@ -10,7 +13,7 @@ const dummyVehicles: Vehicle[] = [
     cameraName: "Park Street Junction",
     latitude: 22.5535,
     longitude: 88.3525,
-    detectedAt: "10:42:18",
+    detectedAt: timeAgo(10),
   },
   {
     id: "VH_002",
@@ -21,7 +24,7 @@ const dummyVehicles: Vehicle[] = [
     cameraName: "Esplanade Crossing",
     latitude: 22.5646,
     longitude: 88.3512,
-    detectedAt: "10:45:32",
+    detectedAt: timeAgo(8),
   },
   {
     id: "VH_003",
@@ -32,7 +35,7 @@ const dummyVehicles: Vehicle[] = [
     cameraName: "Salt Lake Sector V",
     latitude: 22.5769,
     longitude: 88.4331,
-    detectedAt: "10:48:05",
+    detectedAt: timeAgo(5),
   },
   {
     id: "VH_004",
@@ -43,7 +46,7 @@ const dummyVehicles: Vehicle[] = [
     cameraName: "Howrah Bridge",
     latitude: 22.5958,
     longitude: 88.3476,
-    detectedAt: "10:51:21",
+    detectedAt: timeAgo(2),
   },
 ];
 

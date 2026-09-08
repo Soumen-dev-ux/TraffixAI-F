@@ -1,5 +1,8 @@
 import { VehicleTrajectory } from "../../domain/models/VehicleTrajectory";
 
+const nowMs = Date.now();
+const timeAgo = (mins: number) => new Date(nowMs - mins * 60000).toISOString();
+
 const dummyTrajectories: VehicleTrajectory[] = [
   {
     vehicleId: "VH_001",
@@ -12,7 +15,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Park Street Junction",
         latitude: 22.5535,
         longitude: 88.3525,
-        detectedAt: "10:12:05",
+        detectedAt: timeAgo(35),
       },
       {
         id: "DET_002",
@@ -20,7 +23,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Esplanade Crossing",
         latitude: 22.5646,
         longitude: 88.3512,
-        detectedAt: "10:18:42",
+        detectedAt: timeAgo(25),
       },
       {
         id: "DET_003",
@@ -28,7 +31,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Howrah Bridge",
         latitude: 22.5958,
         longitude: 88.3476,
-        detectedAt: "10:27:18",
+        detectedAt: timeAgo(15),
       },
       {
         id: "DET_004",
@@ -36,7 +39,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Salt Lake Sector V",
         latitude: 22.5769,
         longitude: 88.4331,
-        detectedAt: "10:41:33",
+        detectedAt: timeAgo(5),
       },
     ],
   },
@@ -51,7 +54,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Gariahat Junction",
         latitude: 22.5186,
         longitude: 88.3654,
-        detectedAt: "10:20:10",
+        detectedAt: timeAgo(25),
       },
       {
         id: "DET_006",
@@ -59,7 +62,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Park Street Junction",
         latitude: 22.5535,
         longitude: 88.3525,
-        detectedAt: "10:35:40",
+        detectedAt: timeAgo(12),
       },
       {
         id: "DET_007",
@@ -67,7 +70,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Esplanade Crossing",
         latitude: 22.5646,
         longitude: 88.3512,
-        detectedAt: "10:45:32",
+        detectedAt: timeAgo(4),
       },
     ],
   },
@@ -82,7 +85,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Howrah Bridge",
         latitude: 22.5958,
         longitude: 88.3476,
-        detectedAt: "10:15:00",
+        detectedAt: timeAgo(18),
       },
       {
         id: "DET_009",
@@ -90,7 +93,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Salt Lake Sector V",
         latitude: 22.5769,
         longitude: 88.4331,
-        detectedAt: "10:48:05",
+        detectedAt: timeAgo(3),
       },
     ],
   },
@@ -105,7 +108,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Park Street Junction",
         latitude: 22.5535,
         longitude: 88.3525,
-        detectedAt: "10:05:12",
+        detectedAt: timeAgo(15),
       },
       {
         id: "DET_011",
@@ -113,7 +116,7 @@ const dummyTrajectories: VehicleTrajectory[] = [
         cameraName: "Howrah Bridge",
         latitude: 22.5958,
         longitude: 88.3476,
-        detectedAt: "10:51:21",
+        detectedAt: timeAgo(2),
       },
     ],
   },

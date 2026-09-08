@@ -39,6 +39,20 @@ type Props = {
   onTabChange: (tab: TabType) => void;
   onSelectQuickVehicle?: (plate: string) => void;
   onToggleCollapse?: () => void;
+  liveDetections?: { id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[];
+};
+
+const formatDisplayTime = (timeVal?: string | null) => {
+  if (!timeVal) return '--:--:--';
+  const trimmed = timeVal.trim();
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+    return trimmed;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  return trimmed;
 };
 
 export const DockedSidebar: React.FC<Props> = ({
@@ -61,6 +75,7 @@ export const DockedSidebar: React.FC<Props> = ({
   onTabChange,
   onSelectQuickVehicle,
   onToggleCollapse,
+  liveDetections = [],
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
@@ -345,7 +360,7 @@ export const DockedSidebar: React.FC<Props> = ({
                     <View style={styles.metaItem}>
                       <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                       <Text style={[styles.metaValue, { color: colors.text }]}>
-                        {new Date(vehicle.detectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatDisplayTime(vehicle.detectedAt)}
                       </Text>
                     </View>
                     <View style={styles.metaItem}>
@@ -411,7 +426,7 @@ export const DockedSidebar: React.FC<Props> = ({
                             )}
                           </View>
                           <Text style={[styles.waypointTime, { color: colors.textSecondary }]}>
-                            {new Date(detection.detectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            {formatDisplayTime(detection.detectedAt)}
                           </Text>
                         </View>
                       </View>
@@ -429,19 +444,62 @@ export const DockedSidebar: React.FC<Props> = ({
                   Enter any vehicle license plate number in the search bar to track its historical route and camera detections in real time.
                 </Text>
 
-                <Text style={[styles.suggestedTitle, { color: colors.textMuted }]}>TRY DEMO VEHICLES:</Text>
-                <View style={styles.suggestedRow}>
-                  {['WB12AB1234', 'WB06CD5678'].map((plate) => (
-                    <TouchableOpacity
-                      key={plate}
-                      style={[styles.suggestedChip, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
-                      onPress={() => onSelectQuickVehicle?.(plate)}
-                    >
-                      <Ionicons name="car-outline" size={14} color={colors.accent} />
-                      <Text style={[styles.suggestedChipText, { color: colors.text }]}>{plate}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                {liveDetections.length > 0 ? (
+                  <View style={{ width: '100%', marginTop: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <View style={[styles.livePulseDot, { backgroundColor: colors.accentGreen }]} />
+                      <Text style={[styles.suggestedTitle, { color: colors.text, marginBottom: 0 }]}>
+                        LIVE AI DETECTIONS ({liveDetections.length})
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 12 }}>
+                      Recent vehicles detected by YOLOv8 vision pipeline:
+                    </Text>
+                    <View style={{ gap: 8 }}>
+                      {liveDetections.slice(0, 8).map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: 10,
+                            borderRadius: 10,
+                            backgroundColor: colors.surfaceLight,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                          onPress={() => onSelectQuickVehicle?.(item.plateNumber)}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="car-sport" size={16} color={colors.accent} />
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{item.plateNumber}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{item.cameraName}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>{formatDisplayTime(item.detectedAt)}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={[styles.suggestedTitle, { color: colors.textMuted }]}>SUGGESTED VEHICLES:</Text>
+                    <View style={styles.suggestedRow}>
+                      {['WB12AB1234', 'WB06CD5678', 'WB18GH3456'].map((plate) => (
+                        <TouchableOpacity
+                          key={plate}
+                          style={[styles.suggestedChip, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
+                          onPress={() => onSelectQuickVehicle?.(plate)}
+                        >
+                          <Ionicons name="car-outline" size={14} color={colors.accent} />
+                          <Text style={[styles.suggestedChipText, { color: colors.text }]}>{plate}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
               </View>
             )}
           </ScrollView>
