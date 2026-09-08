@@ -43,18 +43,22 @@ export default function CityMap({
     if (iframeRef.current && iframeRef.current.contentWindow) {
       const currentCameras = camerasRef.current;
       const heatmapPoints = getTrafficHeatmapPoints(currentCameras);
-      iframeRef.current.contentWindow.postMessage(
-        {
-          type: "UPDATE_DATA",
-          cameras: currentCameras,
-          vehicle: vehicleRef.current,
-          trajectory: trajectoryRef.current,
-          showHeatmap: showHeatmapRef.current,
-          is3DView: is3DViewRef.current,
-          heatmapPoints,
-        },
-        "*"
-      );
+      const payload = {
+        type: "UPDATE_DATA",
+        cameras: currentCameras,
+        vehicle: vehicleRef.current,
+        trajectory: trajectoryRef.current,
+        showHeatmap: showHeatmapRef.current,
+        is3DView: is3DViewRef.current,
+        heatmapPoints,
+      };
+      try {
+        const win = iframeRef.current.contentWindow as any;
+        if (typeof win.__traffixUpdateMap === 'function') {
+          win.__traffixUpdateMap(payload);
+        }
+      } catch (e) {}
+      iframeRef.current.contentWindow.postMessage(payload, "*");
     }
   };
 

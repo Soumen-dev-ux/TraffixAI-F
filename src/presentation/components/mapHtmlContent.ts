@@ -177,11 +177,74 @@ export function getMapHtmlContent(): string {
     .maplibregl-ctrl-icon {
       filter: invert(1) brightness(0.8);
     }
+    .route-animated-dash {
+      animation: routeDashFlow 1.2s linear infinite;
+    }
+    @keyframes routeDashFlow {
+      from { stroke-dashoffset: 26; }
+      to { stroke-dashoffset: 0; }
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <svg id="route-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
+    <defs>
+      <filter id="route-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="3.5" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <linearGradient id="route-emerald-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#10b981" />
+        <stop offset="50%" stop-color="#34d399" />
+        <stop offset="100%" stop-color="#06b6d4" />
+      </linearGradient>
+    </defs>
+    <!-- Background dark border casing -->
+    <path id="route-svg-casing" d="" fill="none" stroke="#090d16" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />
+    <!-- Vibrant glowing route ribbon -->
+    <path id="route-svg-glow" d="" fill="none" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" filter="url(#route-glow-filter)" />
+    <!-- Center gradient laser line -->
+    <path id="route-svg-core" d="" fill="none" stroke="url(#route-emerald-grad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Animated flowing white pulse dash -->
+    <path id="route-svg-dash" d="" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="10 16" class="route-animated-dash" />
+  </svg>
   <script>
+    var activeLineCoords = [];
+
+    function updateRouteSvg() {
+      var casing = document.getElementById('route-svg-casing');
+      var glow = document.getElementById('route-svg-glow');
+      var core = document.getElementById('route-svg-core');
+      var dash = document.getElementById('route-svg-dash');
+      if (!casing || !glow || !core || !dash || !map) return;
+
+      if (!activeLineCoords || activeLineCoords.length < 2) {
+        casing.setAttribute('d', '');
+        glow.setAttribute('d', '');
+        core.setAttribute('d', '');
+        dash.setAttribute('d', '');
+        return;
+      }
+
+      var dStr = '';
+      for (var i = 0; i < activeLineCoords.length; i++) {
+        try {
+          var p = map.project(activeLineCoords[i]);
+          if (p && !isNaN(p.x) && !isNaN(p.y)) {
+            dStr += (dStr === '' ? 'M ' : ' L ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1);
+          }
+        } catch(e) {}
+      }
+
+      casing.setAttribute('d', dStr);
+      glow.setAttribute('d', dStr);
+      core.setAttribute('d', dStr);
+      dash.setAttribute('d', dStr);
+    }
     function postToHost(msg) {
       try {
         var payload = typeof msg === 'string' ? msg : JSON.stringify(msg);
@@ -270,101 +333,118 @@ export function getMapHtmlContent(): string {
     var is3DCurrent = true;
 
     function initLayers() {
-      // 1. WebGL Traffic Density Heatmap
-      if (!map.getSource('traffic-heat-source')) {
-        map.addSource('traffic-heat-source', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-        map.addLayer({
-          id: 'traffic-heat-layer',
-          type: 'heatmap',
-          source: 'traffic-heat-source',
-          maxzoom: 18,
-          paint: {
-            'heatmap-weight': ['get', 'weight'],
-            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1, 15, 2.5],
-            'heatmap-color': [
-              'interpolate', ['linear'], ['heatmap-density'],
-              0, 'rgba(0, 0, 255, 0)',
-              0.2, '#3b82f6',
-              0.4, '#06b6d4',
-              0.6, '#10b981',
-              0.8, '#f59e0b',
-              1.0, '#ef4444'
-            ],
-            'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
-            'heatmap-opacity': 0.72
-          }
-        });
-      }
+      try {
+        // 1. WebGL Traffic Density Heatmap
+        if (!map.getSource('traffic-heat-source')) {
+          map.addSource('traffic-heat-source', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'traffic-heat-layer',
+            type: 'heatmap',
+            source: 'traffic-heat-source',
+            maxzoom: 18,
+            paint: {
+              'heatmap-weight': ['get', 'weight'],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1, 15, 2.5],
+              'heatmap-color': [
+                'interpolate', ['linear'], ['heatmap-density'],
+                0, 'rgba(0, 0, 255, 0)',
+                0.2, '#3b82f6',
+                0.4, '#06b6d4',
+                0.6, '#10b981',
+                0.8, '#f59e0b',
+                1.0, '#ef4444'
+              ],
+              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
+              'heatmap-opacity': 0.72
+            }
+          });
+        }
 
-      // 2. Elevated 3D Trajectory Ribbon (Multi-Layer Depth)
-      if (!map.getSource('trajectory-source')) {
-        map.addSource('trajectory-source', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
-        });
+        // 2. Elevated 3D Trajectory Ribbon (Multi-Layer Depth)
+        if (!map.getSource('trajectory-source')) {
+          map.addSource('trajectory-source', {
+            type: 'geojson',
+            data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+          });
 
-        // Layer A: Ground Drop-Shadow (provides floating 3D elevation illusion)
-        map.addLayer({
-          id: 'trajectory-shadow-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#000000',
-            'line-width': 12,
-            'line-opacity': 0.45,
-            'line-blur': 6,
-            'line-offset': 4
-          }
-        });
+          // Layer A: Bold Dark Contrast Casing
+          map.addLayer({
+            id: 'trajectory-shadow-layer',
+            type: 'line',
+            source: 'trajectory-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+              'line-color': '#0f172a',
+              'line-width': 11,
+              'line-opacity': 0.95
+            }
+          });
 
-        // Layer B: Outer Neon Mint Glow
-        map.addLayer({
-          id: 'trajectory-glow-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#34d399',
-            'line-width': 10,
-            'line-opacity': 0.65,
-            'line-blur': 4
-          }
-        });
+          // Layer B: Ultra-Vibrant Electric Emerald Glow
+          map.addLayer({
+            id: 'trajectory-glow-layer',
+            type: 'line',
+            source: 'trajectory-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 8,
+              'line-opacity': 1.0
+            }
+          });
 
-        // Layer C: Vibrant Emerald Core Route
-        map.addLayer({
-          id: 'trajectory-line-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#10b981',
-            'line-width': 5,
-            'line-opacity': 1.0
-          }
-        });
+          // Layer C: High-Luminance Neon Mint Core
+          map.addLayer({
+            id: 'trajectory-line-layer',
+            type: 'line',
+            source: 'trajectory-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+              'line-color': '#34d399',
+              'line-width': 5,
+              'line-opacity': 1.0
+            }
+          });
 
-        // Layer D: Sharp Center Mint Laser Highlight
-        map.addLayer({
-          id: 'trajectory-highlight-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#a7f3d0',
-            'line-width': 1.5,
-            'line-opacity': 0.95
-          }
-        });
+          // Layer D: Sharp Center Pure White Laser Line
+          map.addLayer({
+            id: 'trajectory-highlight-layer',
+            type: 'line',
+            source: 'trajectory-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': 2,
+              'line-opacity': 1.0
+            }
+          });
+        }
+        return true;
+      } catch (e) {
+        console.warn('initLayers caught error:', e);
+        return false;
       }
     }
 
-    map.on('load', function() {
+    function setupReady() {
+      if (isMapReady) {
+        initLayers();
+        return;
+      }
       isMapReady = true;
+      initLayers();
+      if (pendingData) {
+        var d = pendingData;
+        pendingData = null;
+        updateMap(d);
+      }
+      postToHost({ type: 'MAP_READY' });
+    }
+
+    map.on('style.load', function() {
       try {
         map.setLight({
           anchor: 'viewport',
@@ -373,13 +453,17 @@ export function getMapHtmlContent(): string {
           position: [1.15, 210, 30]
         });
       } catch(e) {}
-      initLayers();
-      if (pendingData) {
-        updateMap(pendingData);
-        pendingData = null;
-      }
-      postToHost({ type: 'MAP_READY' });
+      setupReady();
     });
+
+    map.on('load', function() {
+      setupReady();
+    });
+
+    // Fallback: If style.load or load delays due to network/tile issues, initialize immediately
+    setTimeout(function() {
+      setupReady();
+    }, 250);
 
     function updateMap(data) {
       if (!data) return;
@@ -488,13 +572,23 @@ export function getMapHtmlContent(): string {
         }
       }
 
+      activeLineCoords = lineCoords;
+      updateRouteSvg();
+
+      if (!map.getSource('trajectory-source')) {
+        initLayers();
+      }
       if (map.getSource('trajectory-source')) {
         map.getSource('trajectory-source').setData({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: lineCoords.length > 1 ? lineCoords : []
-          }
+          type: 'FeatureCollection',
+          features: lineCoords.length > 1 ? [{
+            type: 'Feature',
+            properties: { id: 'route' },
+            geometry: {
+              type: 'LineString',
+              coordinates: lineCoords
+            }
+          }] : []
         });
       }
 
@@ -539,6 +633,10 @@ export function getMapHtmlContent(): string {
         }
       }
     }
+
+    map.on('move', updateRouteSvg);
+    map.on('render', updateRouteSvg);
+    map.on('zoom', updateRouteSvg);
 
     window.__traffixUpdateMap = function(data) {
       if (typeof data === 'string') {
