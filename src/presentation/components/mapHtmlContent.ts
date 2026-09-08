@@ -245,78 +245,108 @@ export function getMapHtmlContent(): string {
       return accept ? [x0, y0, x1, y1] : null;
     }
 
+    function perpDistSq(pt, l1, l2) {
+      var dx = l2[0] - l1[0];
+      var dy = l2[1] - l1[1];
+      var lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return (pt[0] - l1[0]) * (pt[0] - l1[0]) + (pt[1] - l1[1]) * (pt[1] - l1[1]);
+      var u = Math.max(0, Math.min(1, ((pt[0] - l1[0]) * dx + (pt[1] - l1[1]) * dy) / lenSq));
+      var px = l1[0] + u * dx;
+      var py = l1[1] + u * dy;
+      return (pt[0] - px) * (pt[0] - px) + (pt[1] - py) * (pt[1] - py);
+    }
+
+    function rdpSimplify(points, epsSq) {
+      if (!points || points.length <= 2) return points || [];
+      var maxDistSq = 0;
+      var index = 0;
+      var start = points[0];
+      var end = points[points.length - 1];
+      for (var i = 1; i < points.length - 1; i++) {
+        var dSq = perpDistSq(points[i], start, end);
+        if (dSq > maxDistSq) {
+          maxDistSq = dSq;
+          index = i;
+        }
+      }
+      if (maxDistSq > epsSq) {
+        var left = rdpSimplify(points.slice(0, index + 1), epsSq);
+        var right = rdpSimplify(points.slice(index), epsSq);
+        return left.slice(0, left.length - 1).concat(right);
+      } else {
+        return [start, end];
+      }
+    }
+
     function drawRouteCanvas() {
       var canvas = document.getElementById('route-canvas');
       if (!canvas || !map) return;
       var ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      var W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
       if (!activeLineCoords || activeLineCoords.length < 2) return;
 
       var margin = 60;
       var xmin = -margin, ymin = -margin;
-      var xmax = canvas.width + margin, ymax = canvas.height + margin;
+      var xmax = W + margin, ymax = H + margin;
 
       var projected = [];
       for (var i = 0; i < activeLineCoords.length; i++) {
         try {
           var p = map.project(activeLineCoords[i]);
-          projected.push(p);
+          if (p && !isNaN(p.x) && !isNaN(p.y) && Math.abs(p.x) < 35000 && Math.abs(p.y) < 35000) {
+            projected.push(p);
+          } else {
+            projected.push(null);
+          }
         } catch(e) {
           projected.push(null);
         }
       }
 
-      var segments = [];
+      var path = new Path2D();
+      var hasSegments = false;
+      var lastX = -999999, lastY = -999999;
+
       for (var j = 0; j < projected.length - 1; j++) {
         var p1 = projected[j];
         var p2 = projected[j + 1];
-        if (!p1 || !p2 || isNaN(p1.x) || isNaN(p1.y) || isNaN(p2.x) || isNaN(p2.y)) continue;
-        // Discard any extreme projection anomalies from points behind 3D camera horizon
-        if (Math.abs(p1.x) > 40000 || Math.abs(p1.y) > 40000 || Math.abs(p2.x) > 40000 || Math.abs(p2.y) > 40000) continue;
+        if (!p1 || !p2) continue;
 
         var clipped = clipLine(p1.x, p1.y, p2.x, p2.y, xmin, ymin, xmax, ymax);
         if (clipped) {
-          segments.push(clipped);
+          hasSegments = true;
+          // Connect smoothly if adjacent to previous segment to eliminate CPU end-cap rasterization
+          if (Math.abs(clipped[0] - lastX) < 1 && Math.abs(clipped[1] - lastY) < 1) {
+            path.lineTo(clipped[2], clipped[3]);
+          } else {
+            path.moveTo(clipped[0], clipped[1]);
+            path.lineTo(clipped[2], clipped[3]);
+          }
+          lastX = clipped[2];
+          lastY = clipped[3];
         }
       }
 
-      if (segments.length === 0) return;
+      if (!hasSegments) return;
 
-      // 1. Dark contrast casing
-      ctx.beginPath();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // 1. Dark contrast casing (base outline)
       ctx.strokeStyle = '#090d16';
       ctx.lineWidth = 10;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (var s = 0; s < segments.length; s++) {
-        ctx.moveTo(segments[s][0], segments[s][1]);
-        ctx.lineTo(segments[s][2], segments[s][3]);
-      }
-      ctx.stroke();
+      ctx.stroke(path);
 
       // 2. Luminous Emerald ribbon
-      ctx.beginPath();
       ctx.strokeStyle = '#10b981';
       ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (var e = 0; e < segments.length; e++) {
-        ctx.moveTo(segments[e][0], segments[e][1]);
-        ctx.lineTo(segments[e][2], segments[e][3]);
-      }
-      ctx.stroke();
+      ctx.stroke(path);
 
       // 3. Cyber Cyan laser core
-      ctx.beginPath();
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (var c = 0; c < segments.length; c++) {
-        ctx.moveTo(segments[c][0], segments[c][1]);
-        ctx.lineTo(segments[c][2], segments[c][3]);
-      }
-      ctx.stroke();
+      ctx.stroke(path);
     }
 
     function applyRouteCoordinates(coords, shouldFitBounds) {
@@ -660,7 +690,9 @@ export function getMapHtmlContent(): string {
       });
 
       if (uniquePoints.length >= 2) {
-        var cacheKey = uniquePoints.map(function(p) {
+        // Limit active routing traversal to latest 6 checkpoints to keep route clean and fast
+        var routingPoints = uniquePoints.length > 6 ? uniquePoints.slice(-6) : uniquePoints;
+        var cacheKey = routingPoints.map(function(p) {
           return p.longitude.toFixed(5) + ',' + p.latitude.toFixed(5);
         }).join(';');
         currentActiveCacheKey = cacheKey;
@@ -674,19 +706,24 @@ export function getMapHtmlContent(): string {
             .then(function(res) { return res.json(); })
             .then(function(resData) {
               if (resData && resData.code === 'Ok' && resData.routes && resData.routes[0] && resData.routes[0].geometry) {
-                var roadCoords = resData.routes[0].geometry.coordinates;
+                var rawCoords = resData.routes[0].geometry.coordinates;
+                // Cartographic Ramer-Douglas-Peucker simplification:
+                // Preserves 100% of curves, turns, roundabouts, and flyovers accurate to within 2.5m,
+                // while stripping redundant collinear straight-line points for 60 FPS performance.
+                var epsDeg = 2.5 / 106000;
+                var roadCoords = rdpSimplify(rawCoords, epsDeg * epsDeg);
                 routeCache[cacheKey] = roadCoords;
                 if (currentActiveCacheKey === cacheKey) {
                   applyRouteCoordinates(roadCoords, true);
                 }
               } else {
-                var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
+                var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
                 applyRouteCoordinates(directCoords, true);
               }
             })
             .catch(function(err) {
               console.warn('OSRM road snapping fallback to direct route:', err);
-              var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
+              var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
               applyRouteCoordinates(directCoords, true);
             });
         }
@@ -737,11 +774,21 @@ export function getMapHtmlContent(): string {
       }
     }
 
-    map.on('move', drawRouteCanvas);
-    map.on('zoom', drawRouteCanvas);
+    var rAFScheduled = false;
+    function scheduleDrawRoute() {
+      if (rAFScheduled) return;
+      rAFScheduled = true;
+      requestAnimationFrame(function() {
+        rAFScheduled = false;
+        drawRouteCanvas();
+      });
+    }
+
+    map.on('move', scheduleDrawRoute);
+    map.on('zoom', scheduleDrawRoute);
     window.addEventListener('resize', function() {
       resizeCanvas();
-      drawRouteCanvas();
+      scheduleDrawRoute();
     });
 
     window.__traffixUpdateMap = function(data) {
