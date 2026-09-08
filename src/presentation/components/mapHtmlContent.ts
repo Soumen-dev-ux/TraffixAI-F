@@ -177,41 +177,10 @@ export function getMapHtmlContent(): string {
     .maplibregl-ctrl-icon {
       filter: invert(1) brightness(0.8);
     }
-    .route-animated-dash {
-      animation: routeDashFlow 1.2s linear infinite;
-    }
-    @keyframes routeDashFlow {
-      from { stroke-dashoffset: 26; }
-      to { stroke-dashoffset: 0; }
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <svg id="route-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
-    <defs>
-      <filter id="route-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur stdDeviation="3.5" result="blur" />
-        <feMerge>
-          <feMergeNode in="blur" />
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-      <linearGradient id="route-emerald-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#10b981" />
-        <stop offset="50%" stop-color="#34d399" />
-        <stop offset="100%" stop-color="#06b6d4" />
-      </linearGradient>
-    </defs>
-    <!-- Background dark border casing -->
-    <path id="route-svg-casing" d="" fill="none" stroke="#090d16" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />
-    <!-- Vibrant glowing route ribbon -->
-    <path id="route-svg-glow" d="" fill="none" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" filter="url(#route-glow-filter)" />
-    <!-- Center gradient laser line -->
-    <path id="route-svg-core" d="" fill="none" stroke="url(#route-emerald-grad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
-    <!-- Animated flowing white pulse dash -->
-    <path id="route-svg-dash" d="" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="10 16" class="route-animated-dash" />
-  </svg>
   <script>
     var activeLineCoords = [];
     var routeCache = {};
@@ -219,7 +188,6 @@ export function getMapHtmlContent(): string {
 
     function applyRouteCoordinates(coords, shouldFitBounds) {
       activeLineCoords = coords || [];
-      updateRouteSvg();
 
       if (!map.getSource('trajectory-source')) {
         initLayers();
@@ -243,37 +211,6 @@ export function getMapHtmlContent(): string {
         coords.forEach(function(c) { bounds.extend(c); });
         map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
       }
-    }
-
-    function updateRouteSvg() {
-      var casing = document.getElementById('route-svg-casing');
-      var glow = document.getElementById('route-svg-glow');
-      var core = document.getElementById('route-svg-core');
-      var dash = document.getElementById('route-svg-dash');
-      if (!casing || !glow || !core || !dash || !map) return;
-
-      if (!activeLineCoords || activeLineCoords.length < 2) {
-        casing.setAttribute('d', '');
-        glow.setAttribute('d', '');
-        core.setAttribute('d', '');
-        dash.setAttribute('d', '');
-        return;
-      }
-
-      var dStr = '';
-      for (var i = 0; i < activeLineCoords.length; i++) {
-        try {
-          var p = map.project(activeLineCoords[i]);
-          if (p && !isNaN(p.x) && !isNaN(p.y)) {
-            dStr += (dStr === '' ? 'M ' : ' L ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1);
-          }
-        } catch(e) {}
-      }
-
-      casing.setAttribute('d', dStr);
-      glow.setAttribute('d', dStr);
-      core.setAttribute('d', dStr);
-      dash.setAttribute('d', dStr);
     }
     function postToHost(msg) {
       try {
@@ -397,7 +334,7 @@ export function getMapHtmlContent(): string {
         if (!map.getSource('trajectory-source')) {
           map.addSource('trajectory-source', {
             type: 'geojson',
-            data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+            data: { type: 'FeatureCollection', features: [] }
           });
 
           // Layer A: Bold Dark Contrast Casing
@@ -614,11 +551,7 @@ export function getMapHtmlContent(): string {
         if (routeCache[cacheKey]) {
           applyRouteCoordinates(routeCache[cacheKey], true);
         } else {
-          // 1. Immediately render direct point-to-point line as instant fallback
-          var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
-          applyRouteCoordinates(directCoords, true);
-
-          // 2. Query OSRM Driving Road Network to snap along actual Kolkata streets
+          // Query OSRM Driving Road Network to snap directly along actual Kolkata streets
           var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
           fetch(osrmUrl)
             .then(function(res) { return res.json(); })
@@ -627,12 +560,17 @@ export function getMapHtmlContent(): string {
                 var roadCoords = resData.routes[0].geometry.coordinates;
                 routeCache[cacheKey] = roadCoords;
                 if (currentActiveCacheKey === cacheKey) {
-                  applyRouteCoordinates(roadCoords, false);
+                  applyRouteCoordinates(roadCoords, true);
                 }
+              } else {
+                var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
+                applyRouteCoordinates(directCoords, true);
               }
             })
             .catch(function(err) {
               console.warn('OSRM road snapping fallback to direct route:', err);
+              var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
+              applyRouteCoordinates(directCoords, true);
             });
         }
       } else {
@@ -681,10 +619,6 @@ export function getMapHtmlContent(): string {
         }
       }
     }
-
-    map.on('move', updateRouteSvg);
-    map.on('render', updateRouteSvg);
-    map.on('zoom', updateRouteSvg);
 
     window.__traffixUpdateMap = function(data) {
       if (typeof data === 'string') {
