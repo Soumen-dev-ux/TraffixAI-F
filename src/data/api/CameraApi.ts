@@ -97,10 +97,18 @@ const cameras: Camera[] = [
   },
 ];
 
-export const CameraApi = {
-  async getCameras(): Promise<Camera[]> {
-    await new Promise((resolve) => setTimeout(resolve, 700));
+import { apiClient } from "./apiClient";
 
+export const CameraApi = {
+  defaultCameras: cameras,
+  async getCameras(): Promise<Camera[]> {
+    const res = await apiClient.get<{ cameras?: Camera[] } | Camera[]>('/api/v1/cameras');
+    if (res.isLive && res.data) {
+      const list = Array.isArray(res.data) ? res.data : (res.data as any).cameras;
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
+    }
     return cameras;
   },
 };

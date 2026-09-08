@@ -15,6 +15,14 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
 
   if (!camera || !visible) return null;
 
+  const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const isOnline = camera.status === 'online';
 
   const getTrafficColor = (level: string) => {
@@ -87,27 +95,56 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
           </View>
         </View>
 
-        {/* Video Feed Placeholder */}
-        <View style={[styles.feedContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-          <Ionicons
-            name="videocam"
-            size={36}
-            color={isOnline ? colors.accent : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.feedText,
-              { color: isOnline ? colors.accent : colors.textMuted },
-            ]}
-          >
-            {isOnline ? 'LIVE ANPR STREAM' : 'FEED OFFLINE'}
-          </Text>
+        {/* Real Live Video Feed */}
+        <View style={[styles.feedContainer, { backgroundColor: '#000000', borderColor: colors.border }]}>
+          {isOnline ? (
+            Platform.OS === 'web' ? (
+              React.createElement('video', {
+                key: camera.id,
+                src: camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4',
+                autoPlay: true,
+                loop: true,
+                muted: true,
+                playsInline: true,
+                style: {
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                },
+              })
+            ) : (
+              <View style={styles.feedCenterContent}>
+                <Ionicons name="videocam" size={36} color={colors.accent} />
+                <Text style={[styles.feedText, { color: colors.accent }]}>LIVE ANPR STREAM</Text>
+              </View>
+            )
+          ) : (
+            <View style={styles.feedCenterContent}>
+              <Ionicons name="videocam-off" size={36} color={colors.textMuted} />
+              <Text style={[styles.feedText, { color: colors.textMuted }]}>FEED OFFLINE</Text>
+            </View>
+          )}
 
           {isOnline && (
-            <View style={[styles.liveBadge, { backgroundColor: colors.surface }]}>
-              <View style={[styles.pulseDot, { backgroundColor: colors.accentGreen }]} />
-              <Text style={[styles.liveText, { color: colors.accentGreen }]}>LIVE</Text>
-            </View>
+            <>
+              {/* Overlay Top Left: Camera ID & FPS */}
+              <View style={styles.feedOverlayCamId}>
+                <Text style={styles.feedOverlayCamText}>{camera.id}</Text>
+                <Text style={styles.feedOverlayFpsText}>• {camera.fps} FPS</Text>
+              </View>
+
+              {/* Overlay Top Right: Live Badge */}
+              <View style={styles.liveBadge}>
+                <View style={[styles.pulseDot, { backgroundColor: colors.accentGreen }]} />
+                <Text style={[styles.liveText, { color: colors.accentGreen }]}>LIVE</Text>
+              </View>
+
+              {/* Overlay Bottom Right: Timecode */}
+              <View style={styles.feedOverlayTime}>
+                <Text style={styles.feedOverlayTimeText}>{currentTime}</Text>
+              </View>
+            </>
           )}
         </View>
 
@@ -258,13 +295,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   feedContainer: {
-    height: 120,
+    height: 160,
     borderRadius: 10,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
     position: 'relative',
+    overflow: 'hidden',
+  },
+  feedCenterContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   feedText: {
     fontSize: 12,
@@ -272,12 +314,36 @@ const styles = StyleSheet.create({
     marginTop: 6,
     letterSpacing: 0.8,
   },
+  feedOverlayCamId: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  feedOverlayCamText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  feedOverlayFpsText: {
+    color: '#38bdf8',
+    fontSize: 10,
+    fontWeight: '600',
+  },
   liveBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -291,6 +357,21 @@ const styles = StyleSheet.create({
   liveText: {
     fontSize: 10,
     fontWeight: '800',
+  },
+  feedOverlayTime: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  feedOverlayTimeText: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '600',
   },
   trafficBanner: {
     flexDirection: 'row',

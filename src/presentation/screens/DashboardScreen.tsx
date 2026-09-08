@@ -10,27 +10,29 @@ import { SettingsModal } from "../components/SettingsModal";
 import { ProfileModal } from "../components/ProfileModal";
 import { useTheme } from "../theme/ThemeContext";
 
-import { MockTrafficAnalyticsReposiory } from "@/src/data/repositories/MockTrafficAnalyticsRepository";
-import { MockVehicleRepository } from "@/src/data/repositories/MockVehicleRepository";
+import { HttpTrafficAnalyticsRepository } from "@/src/data/repositories/HttpTrafficAnalyticsRepository";
+import { HttpVehicleRepository } from "@/src/data/repositories/HttpVehicleRepository";
 import { TrafficAnalytics } from "@/src/domain/models/TrafficAnalytics";
 import { Vehicle } from "@/src/domain/models/Vehicle";
 import { VehicleTrajectory } from "@/src/domain/models/VehicleTrajectory";
 import { GetTrafficAnalytics } from "@/src/domain/usecases/GetTrafficAnalytics";
 import { GetVehicleTrajectory } from "@/src/domain/usecases/GetVehicleTrajectory";
 import { SearchVehicle } from "@/src/domain/usecases/searchVehicle";
-import { MockCameraRepository } from "../../data/repositories/MockCameraRepository";
-import { MockVehicleTrajectoryRepository } from "../../data/repositories/MockVehicleTrajectoryRepository";
+import { CameraApi } from "../../data/api/CameraApi";
+import { TrafficAnalyticsApi } from "../../data/api/TrafficAnalyticsApi";
+import { HttpCameraRepository } from "../../data/repositories/HttpCameraRepository";
+import { HttpVehicleTrajectoryRepository } from "../../data/repositories/HttpVehicleTrajectoryRepository";
 import { Camera } from "../../domain/models/Camera";
 import { GetCameras } from "../../domain/usecases/GetCameras";
 import { RealtimeEvent } from "@/src/domain/models/RealtimeEvent";
 import { SubscribeToRealtimeUpdates } from "@/src/domain/usecases/SubscribeToRealtimeUpdates";
-import { MockRealtimeRepository } from "@/src/data/repositories/MockRealtimeRepository";
+import { WebSocketRealtimeRepository } from "@/src/data/repositories/WebSocketRealtimeRepository";
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
 
   // Camera data
-  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>(CameraApi.defaultCameras);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   // Vehicle tracking & search
@@ -41,20 +43,20 @@ export default function DashboardScreen() {
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
 
   // Analytics & Realtime
-  const [analytics, setAnalytics] = useState<TrafficAnalytics | null>(null);
+  const [analytics, setAnalytics] = useState<TrafficAnalytics | null>(TrafficAnalyticsApi.defaultAnalytics);
   const [, setLastRealtimeEvent] = useState<RealtimeEvent | null>(null);
 
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'cameras' | 'tracking' | 'analytics'>('cameras');
+  const [activeTab, setActiveTab] = useState<'cameras' | 'tracking' | 'analytics' | 'alerts'>('cameras');
   const [is3DView, setIs3DView] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
 
-  // Realtime subscription
+  // Realtime subscription (WebSocket with auto-fallback)
   useEffect(() => {
-    const repository = new MockRealtimeRepository();
+    const repository = new WebSocketRealtimeRepository();
     const useCase = new SubscribeToRealtimeUpdates(repository);
     const unsubscribe = useCase.execute((event) => {
       setLastRealtimeEvent(event);
@@ -64,7 +66,7 @@ export default function DashboardScreen() {
 
   // Analytics data
   useEffect(() => {
-    const repository = new MockTrafficAnalyticsReposiory();
+    const repository = new HttpTrafficAnalyticsRepository();
     const useCase = new GetTrafficAnalytics(repository);
     useCase.execute().then(setAnalytics);
   }, []);
@@ -73,7 +75,7 @@ export default function DashboardScreen() {
   useEffect(() => {
     const loadCameras = async () => {
       try {
-        const repository = new MockCameraRepository();
+        const repository = new HttpCameraRepository();
         const getCameras = new GetCameras(repository);
         const data = await getCameras.execute();
         setCameras(data);
@@ -97,14 +99,14 @@ export default function DashboardScreen() {
     setVehicle(null);
 
     try {
-      const repository = new MockVehicleRepository();
+      const repository = new HttpVehicleRepository();
       const searchVehicle = new SearchVehicle(repository);
       const result = await searchVehicle.execute(target);
 
       if (result) {
         setVehicle(result);
 
-        const trajectoryRepository = new MockVehicleTrajectoryRepository();
+        const trajectoryRepository = new HttpVehicleTrajectoryRepository();
         const getVehicleTrajectory = new GetVehicleTrajectory(trajectoryRepository);
         const trajectoryResult = await getVehicleTrajectory.execute(target);
 

@@ -16,7 +16,7 @@ import { Vehicle } from '../../domain/models/Vehicle';
 import { VehicleTrajectory } from '../../domain/models/VehicleTrajectory';
 import { TrafficAnalytics } from '../../domain/models/TrafficAnalytics';
 
-type TabType = 'cameras' | 'tracking' | 'analytics';
+type TabType = 'cameras' | 'tracking' | 'analytics' | 'alerts';
 type FilterType = 'all' | 'online' | 'high';
 
 type Props = {
@@ -229,6 +229,23 @@ export const DockedSidebar: React.FC<Props> = ({
           <Text style={[styles.tabLabel, { color: activeTab === 'analytics' ? colors.text : colors.textSecondary }]}>
             Analytics
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'alerts' && { borderBottomColor: colors.accentRed, borderBottomWidth: 2 }]}
+          onPress={() => onTabChange('alerts')}
+        >
+          <Ionicons
+            name="warning-outline"
+            size={16}
+            color={activeTab === 'alerts' ? colors.accentRed : colors.textSecondary}
+          />
+          <Text style={[styles.tabLabel, { color: activeTab === 'alerts' ? colors.text : colors.textSecondary }]}>
+            Alerts
+          </Text>
+          <View style={[styles.alertCountBadge, { backgroundColor: colors.accentRed }]}>
+            <Text style={styles.alertCountBadgeText}>2</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -484,6 +501,73 @@ export const DockedSidebar: React.FC<Props> = ({
             </View>
           </ScrollView>
         )}
+
+        {/* TAB 4: SECURITY & ANOMALY ALERTS */}
+        {activeTab === 'alerts' && (
+          <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
+            <View style={styles.alertsContainer}>
+              {/* Alert 1: Cloned Plate Anomaly */}
+              <View style={[styles.alertCard, { backgroundColor: colors.surfaceLight, borderColor: colors.accentRed }]}>
+                <View style={styles.alertCardHeader}>
+                  <View style={[styles.alertIconBadge, { backgroundColor: colors.surface }]}>
+                    <Ionicons name="warning" size={18} color={colors.accentRed} />
+                  </View>
+                  <View style={styles.alertHeaderInfo}>
+                    <Text style={[styles.alertTypeTitle, { color: colors.accentRed }]}>CLONED PLATE DETECTED</Text>
+                    <Text style={[styles.alertTimestamp, { color: colors.textMuted }]}>2 min ago • Critical Anomaly</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.alertPlatePill, { backgroundColor: colors.surface, borderColor: colors.accentRed }]}>
+                  <Text style={[styles.alertPlateText, { color: colors.text }]}>WB12AB1234</Text>
+                  <Text style={[styles.alertPlateSub, { color: colors.textSecondary }]}>White Car</Text>
+                </View>
+
+                <Text style={[styles.alertDescription, { color: colors.textSecondary }]}>
+                  Simultaneous detection at <Text style={{ color: colors.text, fontWeight: '700' }}>Esplanade Crossing</Text> and <Text style={{ color: colors.text, fontWeight: '700' }}>Salt Lake Sector V</Text> within 30 seconds. Spatial-temporal velocity exceeds physical limits.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.alertActionBtn, { backgroundColor: colors.accentRed }]}
+                  onPress={() => onSelectQuickVehicle?.('WB12AB1234')}
+                >
+                  <Ionicons name="locate" size={14} color="#ffffff" />
+                  <Text style={styles.alertActionBtnText}>Inspect Trajectory</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Alert 2: Stolen / Hotlist Vehicle Match */}
+              <View style={[styles.alertCard, { backgroundColor: colors.surfaceLight, borderColor: colors.accentAmber }]}>
+                <View style={styles.alertCardHeader}>
+                  <View style={[styles.alertIconBadge, { backgroundColor: colors.surface }]}>
+                    <Ionicons name="shield-half" size={18} color={colors.accentAmber} />
+                  </View>
+                  <View style={styles.alertHeaderInfo}>
+                    <Text style={[styles.alertTypeTitle, { color: colors.accentAmber }]}>HOTLIST / STOLEN MATCH</Text>
+                    <Text style={[styles.alertTimestamp, { color: colors.textMuted }]}>7 min ago • Wanted Notice</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.alertPlatePill, { backgroundColor: colors.surface, borderColor: colors.accentAmber }]}>
+                  <Text style={[styles.alertPlateText, { color: colors.text }]}>WB18GH3456</Text>
+                  <Text style={[styles.alertPlateSub, { color: colors.textSecondary }]}>Red Truck</Text>
+                </View>
+
+                <Text style={[styles.alertDescription, { color: colors.textSecondary }]}>
+                  Flagged in West Bengal Police FIR-2026-BEL-04 (Commercial Cargo Theft). Last observed crossing <Text style={{ color: colors.text, fontWeight: '700' }}>Howrah Bridge</Text> heading East.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.alertActionBtn, { backgroundColor: colors.surface, borderColor: colors.accentAmber, borderWidth: 1 }]}
+                  onPress={() => onSelectQuickVehicle?.('WB18GH3456')}
+                >
+                  <Ionicons name="navigate" size={14} color={colors.accentAmber} />
+                  <Text style={[styles.alertActionBtnText, { color: colors.accentAmber }]}>Track Live Waypoints</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* 5. Footer Status Strip */}
@@ -628,6 +712,16 @@ const styles = StyleSheet.create({
   tabBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  alertCountBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  alertCountBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
   },
   activeDot: {
     width: 6,
@@ -938,5 +1032,74 @@ const styles = StyleSheet.create({
   footerDivision: {
     fontSize: 10,
     paddingLeft: 16,
+  },
+  alertsContainer: {
+    paddingVertical: 12,
+    gap: 12,
+  },
+  alertCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  alertCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  alertIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertHeaderInfo: {
+    flex: 1,
+  },
+  alertTypeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  alertTimestamp: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  alertPlatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  alertPlateText: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    letterSpacing: 1,
+  },
+  alertPlateSub: {
+    fontSize: 11,
+  },
+  alertDescription: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  alertActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  alertActionBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
