@@ -214,6 +214,36 @@ export function getMapHtmlContent(): string {
   </svg>
   <script>
     var activeLineCoords = [];
+    var routeCache = {};
+    var currentActiveCacheKey = '';
+
+    function applyRouteCoordinates(coords, shouldFitBounds) {
+      activeLineCoords = coords || [];
+      updateRouteSvg();
+
+      if (!map.getSource('trajectory-source')) {
+        initLayers();
+      }
+      if (map.getSource('trajectory-source')) {
+        map.getSource('trajectory-source').setData({
+          type: 'FeatureCollection',
+          features: coords && coords.length > 1 ? [{
+            type: 'Feature',
+            properties: { id: 'route' },
+            geometry: {
+              type: 'LineString',
+              coordinates: coords
+            }
+          }] : []
+        });
+      }
+
+      if (shouldFitBounds && coords && coords.length > 1) {
+        var bounds = new maplibregl.LngLatBounds();
+        coords.forEach(function(c) { bounds.extend(c); });
+        map.fitBounds(bounds, { padding: 80, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
+      }
+    }
 
     function updateRouteSvg() {
       var casing = document.getElementById('route-svg-casing');
@@ -542,54 +572,72 @@ export function getMapHtmlContent(): string {
       trajectoryMarkers.forEach(function(m) { m.remove(); });
       trajectoryMarkers = [];
 
-      var lineCoords = [];
-      if (trajectory && trajectory.detections && trajectory.detections.length > 0) {
-        lineCoords = trajectory.detections.map(function(d) {
-          return [d.longitude, d.latitude];
-        });
+      var detections = (trajectory && trajectory.detections) || [];
 
-        trajectory.detections.forEach(function(detection, index) {
-          var isLatest = index === trajectory.detections.length - 1;
-          var el = document.createElement('div');
-          el.className = 'detection-marker ' + (isLatest ? 'latest' : '');
-          el.innerHTML = String(index + 1);
-
-          var popup = new maplibregl.Popup({ offset: 18 })
-            .setHTML('<strong>Waypoint #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
-
-          var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([detection.longitude, detection.latitude])
-            .setPopup(popup)
-            .addTo(map);
-
-          trajectoryMarkers.push(marker);
-        });
-
-        if (lineCoords.length > 1) {
-          var bounds = new maplibregl.LngLatBounds();
-          lineCoords.forEach(function(c) { bounds.extend(c); });
-          map.fitBounds(bounds, { padding: 60, pitch: is3DCurrent ? 50 : 0, bearing: is3DCurrent ? -18 : 0, duration: 1200 });
+      // Deduplicate consecutive identical coordinates
+      var uniquePoints = [];
+      for (var i = 0; i < detections.length; i++) {
+        var pt = detections[i];
+        if (pt && !isNaN(pt.latitude) && !isNaN(pt.longitude)) {
+          if (uniquePoints.length === 0 ||
+              Math.abs(uniquePoints[uniquePoints.length - 1].latitude - pt.latitude) > 0.0001 ||
+              Math.abs(uniquePoints[uniquePoints.length - 1].longitude - pt.longitude) > 0.0001) {
+            uniquePoints.push(pt);
+          }
         }
       }
 
-      activeLineCoords = lineCoords;
-      updateRouteSvg();
+      // Render waypoint markers
+      uniquePoints.forEach(function(detection, index) {
+        var isLatest = index === uniquePoints.length - 1;
+        var el = document.createElement('div');
+        el.className = 'detection-marker ' + (isLatest ? 'latest' : '');
+        el.innerHTML = String(index + 1);
 
-      if (!map.getSource('trajectory-source')) {
-        initLayers();
-      }
-      if (map.getSource('trajectory-source')) {
-        map.getSource('trajectory-source').setData({
-          type: 'FeatureCollection',
-          features: lineCoords.length > 1 ? [{
-            type: 'Feature',
-            properties: { id: 'route' },
-            geometry: {
-              type: 'LineString',
-              coordinates: lineCoords
-            }
-          }] : []
-        });
+        var popup = new maplibregl.Popup({ offset: 18 })
+          .setHTML('<strong>Waypoint #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
+
+        var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([detection.longitude, detection.latitude])
+          .setPopup(popup)
+          .addTo(map);
+
+        trajectoryMarkers.push(marker);
+      });
+
+      if (uniquePoints.length >= 2) {
+        var cacheKey = uniquePoints.map(function(p) {
+          return p.longitude.toFixed(5) + ',' + p.latitude.toFixed(5);
+        }).join(';');
+        currentActiveCacheKey = cacheKey;
+
+        if (routeCache[cacheKey]) {
+          applyRouteCoordinates(routeCache[cacheKey], true);
+        } else {
+          // 1. Immediately render direct point-to-point line as instant fallback
+          var directCoords = uniquePoints.map(function(p) { return [p.longitude, p.latitude]; });
+          applyRouteCoordinates(directCoords, true);
+
+          // 2. Query OSRM Driving Road Network to snap along actual Kolkata streets
+          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
+          fetch(osrmUrl)
+            .then(function(res) { return res.json(); })
+            .then(function(resData) {
+              if (resData && resData.code === 'Ok' && resData.routes && resData.routes[0] && resData.routes[0].geometry) {
+                var roadCoords = resData.routes[0].geometry.coordinates;
+                routeCache[cacheKey] = roadCoords;
+                if (currentActiveCacheKey === cacheKey) {
+                  applyRouteCoordinates(roadCoords, false);
+                }
+              }
+            })
+            .catch(function(err) {
+              console.warn('OSRM road snapping fallback to direct route:', err);
+            });
+        }
+      } else {
+        currentActiveCacheKey = '';
+        applyRouteCoordinates([], false);
       }
 
       // 4. Update Vehicle
