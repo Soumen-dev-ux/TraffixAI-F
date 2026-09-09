@@ -213,4 +213,11 @@ export const CameraApi = {
     };
     return apiClient.post<any, any>('/api/v1/events/detection', payload);
   },
+
+  async triggerCameraDetection(cameraId: string, mode: 'auto' | 'ai' | 'simulated' = 'auto'): Promise<any> {
+    return apiClient.post<any, any>('/api/v1/simulation/play-camera', {
+      camera_id: cameraId,
+      mode,
+    });
+  },
 };

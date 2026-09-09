@@ -47,6 +47,7 @@ type Props = {
   onDeleteCamera?: (cameraId: string) => void;
   onResetCameras?: (mode: 'clear' | 'reset') => void;
   onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
+  onTriggerCameraDetection?: (cameraId: string) => void;
 };
 
 const formatDisplayTime = (timeVal?: string | null) => {
@@ -90,6 +91,7 @@ export const DockedSidebar: React.FC<Props> = ({
   onDeleteCamera,
   onResetCameras,
   onSimulateDetection,
+  onTriggerCameraDetection,
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
@@ -357,7 +359,10 @@ export const DockedSidebar: React.FC<Props> = ({
                           borderColor: isCurrent ? colors.accent : isVisited ? colors.accentGreen : colors.border,
                         },
                       ]}
-                      onPress={() => onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234')}
+                      onPress={() => {
+                        onTriggerCameraDetection?.(cam.id);
+                        onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234');
+                      }}
                     >
                       <Text
                         style={[
@@ -513,6 +518,7 @@ export const DockedSidebar: React.FC<Props> = ({
                           style={[styles.quickDetectBtn, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}
                           onPress={(e) => {
                             e.stopPropagation();
+                            onTriggerCameraDetection?.(camera.id);
                             onSimulateDetection(camera.id, vehicle?.plateNumber || 'WB12AB1234');
                           }}
                           hitSlop={4}

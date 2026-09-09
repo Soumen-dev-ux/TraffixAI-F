@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { StyleSheet, View, TouchableOpacity, Platform } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import CityMap from "../components/CityMap";
@@ -60,6 +60,7 @@ export default function DashboardScreen() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [showAddCamera, setShowAddCamera] = useState(false);
   const [liveDetections, setLiveDetections] = useState<{ id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[]>([]);
+  const [reidAlert, setReidAlert] = useState<{ plate: string; fromCam: string; toCam: string; count: number } | null>(null);
 
   // Realtime subscription (WebSocket with auto-fallback)
   useEffect(() => {
@@ -151,9 +152,28 @@ export default function DashboardScreen() {
             ...prev.filter((p) => p.plateNumber !== plate).slice(0, 19),
           ]);
 
-          // 4. Automatically position car on map & render multi-camera trajectory route
-          // Only auto-update if matching active vehicle or if no vehicle is currently active
-          if (!vehicleRef.current || vehicleRef.current.plateNumber === plate) {
+          // 4. Check for Multi-Camera Re-ID Match
+          const trajDets = d.trajectory?.detections;
+          if (Array.isArray(trajDets) && trajDets.length >= 2) {
+            const prevPoint = trajDets[trajDets.length - 2];
+            const curPoint = trajDets[trajDets.length - 1];
+            if (prevPoint.cameraId !== curPoint.cameraId) {
+              setReidAlert({
+                plate,
+                fromCam: prevPoint.cameraName || prevPoint.cameraId,
+                toCam: curPoint.cameraName || curPoint.cameraId,
+                count: trajDets.length,
+              });
+              setTimeout(() => {
+                setReidAlert((prev) => (prev && prev.plate === plate ? null : prev));
+              }, 9000);
+            }
+          }
+
+          // 5. Automatically position car on map & render multi-camera trajectory route
+          // Auto-update if matching active vehicle, or no vehicle active, or if multi-camera trajectory arrived
+          const shouldUpdateVehicle = !vehicleRef.current || vehicleRef.current.plateNumber === plate || (Array.isArray(trajDets) && trajDets.length >= 2);
+          if (shouldUpdateVehicle) {
             const newVehicle: Vehicle = {
               id: d.vehicleId || `VH_${plate}`,
               plateNumber: plate,
@@ -447,6 +467,14 @@ export default function DashboardScreen() {
     }).catch(() => {});
   };
 
+  const handleTriggerCameraDetection = async (cameraId: string) => {
+    try {
+      await CameraApi.triggerCameraDetection(cameraId, 'auto');
+    } catch (err) {
+      console.error('Trigger camera detection failed:', err);
+    }
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* 1. Left Docked Solid Sidebar */}
@@ -485,6 +513,7 @@ export default function DashboardScreen() {
           onDeleteCamera={handleDeleteCamera}
           onResetCameras={handleResetCameras}
           onSimulateDetection={handleSimulateVehicleDetection}
+          onTriggerCameraDetection={handleTriggerCameraDetection}
         />
       )}
 
@@ -500,6 +529,31 @@ export default function DashboardScreen() {
           focusLocation={focusLocation}
           style={StyleSheet.absoluteFill}
         />
+
+        {/* Floating Multi-Camera Re-ID Alert Banner */}
+        {reidAlert && (
+          <View style={[styles.reidBanner, { backgroundColor: colors.surface, borderColor: '#00f2fe' }]}>
+            <View style={styles.reidBannerRow}>
+              <View style={styles.reidBadge}>
+                <Ionicons name="git-network" size={18} color="#00f2fe" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.reidTitle, { color: '#00f2fe' }]}>MULTI-CAMERA RE-ID MATCH</Text>
+                  <View style={styles.reidPlateChip}>
+                    <Text style={styles.reidPlateText}>{reidAlert.plate}</Text>
+                  </View>
+                </View>
+                <Text style={[styles.reidSubtitle, { color: colors.text }]}>
+                  {reidAlert.fromCam} ➔ <Text style={{ color: '#00f2fe', fontWeight: 'bold' }}>{reidAlert.toCam}</Text> (Transit Route Linked)
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReidAlert(null)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Floating Expand Button (Visible when sidebar is collapsed) */}
         {!showSidebar && (
@@ -595,5 +649,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 5,
+  },
+  reidBanner: {
+    position: "absolute",
+    top: 18,
+    alignSelf: "center",
+    width: "90%",
+    maxWidth: 480,
+    zIndex: 50,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: "#00f2fe",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  reidBannerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  reidBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 242, 254, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reidTitle: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  reidPlateChip: {
+    backgroundColor: "#00f2fe",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  reidPlateText: {
+    color: "#0a0f1d",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  reidSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
