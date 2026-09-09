@@ -161,6 +161,57 @@ export const CameraApi = {
     return fallback;
   },
 
+  async updateCamera(
+    cameraId: string,
+    updateData: {
+      name?: string;
+      latitude?: number;
+      longitude?: number;
+      direction?: string;
+      stream_url?: string;
+    }
+  ): Promise<Camera> {
+    const res = await apiClient.patch<any, any>(`/api/v1/cameras/${cameraId}`, updateData);
+    if (res.isLive && res.data) {
+      const c = res.data as any;
+      return {
+        id: c.camera_id || c.id || cameraId,
+        name: c.name || updateData.name || 'Camera',
+        latitude: Number(c.latitude || updateData.latitude || 22.5535),
+        longitude: Number(c.longitude || updateData.longitude || 88.3525),
+        direction: c.direction || updateData.direction || 'Northbound',
+        status: (c.status || 'online') as 'online' | 'offline',
+        fps: c.fps || 25,
+        vehicleCount: c.vehicle_count !== undefined ? c.vehicle_count : 0,
+        trafficLevel: c.traffic_level || 'low',
+        streamUrl: c.stream_url || updateData.stream_url || '/videos/sample_traffic.mp4',
+        detectedVehicles: c.detected_vehicles || { car: 0, motorcycle: 0, bus: 0, truck: 0, van: 0, taxi: 0 },
+      };
+    }
+    const idx = cameras.findIndex((c) => c.id === cameraId);
+    if (idx !== -1) {
+      cameras[idx] = {
+        ...cameras[idx],
+        ...updateData,
+        streamUrl: updateData.stream_url || cameras[idx].streamUrl,
+      };
+      return cameras[idx];
+    }
+    return {
+      id: cameraId,
+      name: updateData.name || 'Camera',
+      latitude: updateData.latitude || 22.5535,
+      longitude: updateData.longitude || 88.3525,
+      direction: updateData.direction || 'Northbound',
+      status: 'online',
+      fps: 25,
+      vehicleCount: 0,
+      trafficLevel: 'low',
+      streamUrl: updateData.stream_url || '/videos/sample_traffic.mp4',
+      detectedVehicles: { car: 0, motorcycle: 0, bus: 0, truck: 0, van: 0, taxi: 0 },
+    };
+  },
+
   async deleteCamera(cameraId: string): Promise<boolean> {
     const res = await apiClient.delete<any>(`/api/v1/cameras/${cameraId}`);
     const idx = cameras.findIndex((c) => c.id === cameraId);

@@ -1,55 +1,4 @@
 import { Vehicle } from "../../domain/models/Vehicle";
-
-const nowMs = Date.now();
-const timeAgo = (mins: number) => new Date(nowMs - mins * 60000).toISOString();
-
-const dummyVehicles: Vehicle[] = [
-  {
-    id: "VH_001",
-    plateNumber: "WB12AB1234",
-    vehicleType: "car",
-    color: "White",
-    cameraId: "CAM_001",
-    cameraName: "Park Street Junction",
-    latitude: 22.5535,
-    longitude: 88.3525,
-    detectedAt: timeAgo(10),
-  },
-  {
-    id: "VH_002",
-    plateNumber: "WB06CD5678",
-    vehicleType: "motorcycle",
-    color: "Black",
-    cameraId: "CAM_002",
-    cameraName: "Esplanade Crossing",
-    latitude: 22.5646,
-    longitude: 88.3512,
-    detectedAt: timeAgo(8),
-  },
-  {
-    id: "VH_003",
-    plateNumber: "WB24EF9012",
-    vehicleType: "bus",
-    color: "Blue",
-    cameraId: "CAM_003",
-    cameraName: "Salt Lake Sector V",
-    latitude: 22.5769,
-    longitude: 88.4331,
-    detectedAt: timeAgo(5),
-  },
-  {
-    id: "VH_004",
-    plateNumber: "WB18GH3456",
-    vehicleType: "truck",
-    color: "Red",
-    cameraId: "CAM_004",
-    cameraName: "Howrah Bridge",
-    latitude: 22.5958,
-    longitude: 88.3476,
-    detectedAt: timeAgo(2),
-  },
-];
-
 import { apiClient } from "./apiClient";
 
 export const vehicleApi = {
@@ -77,12 +26,7 @@ export const vehicleApi = {
       }
     }
 
-    // Fallback to local high-fidelity mock data
-    const vehicle = dummyVehicles.find((item) => {
-      const cleanPlate = item.plateNumber.replace(/[\s-]/g, "").toUpperCase();
-      return cleanPlate === cleanQuery || cleanPlate.includes(cleanQuery);
-    });
-
-    return vehicle || null;
+    // Clean slate: no fake fallback vehicles. Return null if not in DB.
+    return null;
   },
 };

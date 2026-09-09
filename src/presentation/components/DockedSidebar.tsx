@@ -48,6 +48,7 @@ type Props = {
   onResetCameras?: (mode: 'clear' | 'reset') => void;
   onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
   onTriggerCameraDetection?: (cameraId: string) => void;
+  onEditCamera?: (camera: Camera) => void;
 };
 
 const formatDisplayTime = (timeVal?: string | null) => {
@@ -92,6 +93,7 @@ export const DockedSidebar: React.FC<Props> = ({
   onResetCameras,
   onSimulateDetection,
   onTriggerCameraDetection,
+  onEditCamera,
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
@@ -361,7 +363,7 @@ export const DockedSidebar: React.FC<Props> = ({
                       ]}
                       onPress={() => {
                         onTriggerCameraDetection?.(cam.id);
-                        onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234');
+                        onSimulateDetection?.(cam.id, vehicle?.plateNumber);
                       }}
                     >
                       <Text
@@ -519,12 +521,26 @@ export const DockedSidebar: React.FC<Props> = ({
                           onPress={(e) => {
                             e.stopPropagation();
                             onTriggerCameraDetection?.(camera.id);
-                            onSimulateDetection(camera.id, vehicle?.plateNumber || 'WB12AB1234');
+                            onSimulateDetection(camera.id, vehicle?.plateNumber);
                           }}
                           hitSlop={4}
                         >
                           <Ionicons name="play" size={10} color={colors.accent} style={{ marginRight: 3 }} />
                           <Text style={[styles.quickDetectText, { color: colors.accent }]}>Detect</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {onEditCamera && (
+                        <TouchableOpacity
+                          style={styles.deleteCamBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            onEditCamera(camera);
+                          }}
+                          hitSlop={6}
+                          accessibilityLabel="Edit Camera / Stream"
+                        >
+                          <Ionicons name="create-outline" size={15} color={colors.accent} />
                         </TouchableOpacity>
                       )}
 
@@ -581,7 +597,7 @@ export const DockedSidebar: React.FC<Props> = ({
                               borderColor: isCurrent ? colors.accent : isVisited ? colors.accentGreen : colors.border,
                             },
                           ]}
-                          onPress={() => onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234')}
+                          onPress={() => onSimulateDetection?.(cam.id, vehicle?.plateNumber)}
                         >
                           <Text
                             style={[
@@ -751,21 +767,15 @@ export const DockedSidebar: React.FC<Props> = ({
                     </View>
                   </View>
                 ) : (
-                  <>
-                    <Text style={[styles.suggestedTitle, { color: colors.textMuted }]}>SUGGESTED VEHICLES:</Text>
-                    <View style={styles.suggestedRow}>
-                      {['WB12AB1234', 'WB06CD5678', 'WB18GH3456'].map((plate) => (
-                        <TouchableOpacity
-                          key={plate}
-                          style={[styles.suggestedChip, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
-                          onPress={() => onSelectQuickVehicle?.(plate)}
-                        >
-                          <Ionicons name="car-outline" size={14} color={colors.accent} />
-                          <Text style={[styles.suggestedChipText, { color: colors.text }]}>{plate}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
+                  <View style={{ backgroundColor: colors.surfaceLight, borderColor: colors.border, borderWidth: 1, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 }}>
+                    <Ionicons name="scan-outline" size={28} color={colors.accent} style={{ marginBottom: 8 }} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4, textAlign: 'center' }}>
+                      No Vehicles Detected Yet
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', lineHeight: 16 }}>
+                      Start AI detection on Camera A or Camera B in the Cameras tab to scan vehicles in real time.
+                    </Text>
+                  </View>
                 )}
               </View>
             )}

@@ -9,6 +9,7 @@ import { CameraPopup } from "../components/CameraPopup";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProfileModal } from "../components/ProfileModal";
 import { AddCameraModal } from "../components/AddCameraModal";
+import { EditCameraModal } from "../components/EditCameraModal";
 import { useTheme } from "../theme/ThemeContext";
 
 import { HttpTrafficAnalyticsRepository } from "@/src/data/repositories/HttpTrafficAnalyticsRepository";
@@ -35,6 +36,7 @@ export default function DashboardScreen() {
   // Camera data
   const [cameras, setCameras] = useState<Camera[]>(CameraApi.defaultCameras);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
 
   // Search state (Location search for Cameras; Vehicle search for Tracking)
   const [searchText, setSearchText] = useState("");
@@ -91,6 +93,33 @@ export default function DashboardScreen() {
       if ((event.type as any) === 'camera_deleted' && event.data) {
         const delId = (event.data as any).camera_id;
         setCameras((prev) => prev.filter((c) => c.id !== delId));
+      }
+
+      if ((event.type as any) === 'camera_updated' && event.data) {
+        const updatedCam = event.data as any;
+        const camId = updatedCam.camera_id || updatedCam.id;
+        setCameras((prev) =>
+          prev.map((c) =>
+            c.id === camId
+              ? {
+                  ...c,
+                  ...updatedCam,
+                  id: camId,
+                  streamUrl: updatedCam.stream_url || c.streamUrl,
+                }
+              : c
+          )
+        );
+        setSelectedCamera((prev) =>
+          prev && prev.id === camId
+            ? {
+                ...prev,
+                ...updatedCam,
+                id: camId,
+                streamUrl: updatedCam.stream_url || prev.streamUrl,
+              }
+            : prev
+        );
       }
 
       if ((event.type as any) === 'cameras_reset' && event.data) {
@@ -239,6 +268,43 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleUpdateCamera = async (
+    cameraId: string,
+    updateData: {
+      name?: string;
+      latitude?: number;
+      longitude?: number;
+      direction?: string;
+      stream_url?: string;
+    }
+  ) => {
+    const updated = await CameraApi.updateCamera(cameraId, updateData);
+    setCameras((prev) =>
+      prev.map((c) =>
+        c.id === cameraId
+          ? {
+              ...c,
+              ...updated,
+              id: cameraId,
+              streamUrl: updated.stream_url || c.streamUrl,
+            }
+          : c
+      )
+    );
+    if (selectedCamera?.id === cameraId) {
+      setSelectedCamera((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...updated,
+              id: cameraId,
+              streamUrl: updated.stream_url || prev.streamUrl,
+            }
+          : null
+      );
+    }
+  };
+
   const handleResetCameras = async (mode: 'clear' | 'reset') => {
     const updated = await CameraApi.resetCameras(mode);
     setCameras(updated);
@@ -271,7 +337,7 @@ export default function DashboardScreen() {
   const executeVehicleSearch = async (plateNumber: string) => {
     const target = plateNumber.trim();
     if (!target) {
-      setVehicleError("Enter a vehicle number (e.g. WB12AB1234)");
+      setVehicleError("Enter a vehicle number to search");
       return;
     }
 
@@ -308,7 +374,7 @@ export default function DashboardScreen() {
       } else {
         setVehicle(null);
         setTrajectory(null);
-        setVehicleError("Vehicle not found. Try searching 'WB12AB1234' or 'WB06CD5678'");
+        setVehicleError(`Vehicle "${target}" not found. Trigger detection on any camera to identify vehicles in real time.`);
       }
     } catch (error) {
       console.error(error);
@@ -514,6 +580,7 @@ export default function DashboardScreen() {
           onResetCameras={handleResetCameras}
           onSimulateDetection={handleSimulateVehicleDetection}
           onTriggerCameraDetection={handleTriggerCameraDetection}
+          onEditCamera={(cam) => setEditingCamera(cam)}
         />
       )}
 
@@ -591,6 +658,7 @@ export default function DashboardScreen() {
           visible={!!selectedCamera}
           onClose={() => setSelectedCamera(null)}
           onSimulateDetection={handleSimulateVehicleDetection}
+          onEditCamera={(cam) => setEditingCamera(cam)}
         />
       </View>
 
@@ -615,6 +683,15 @@ export default function DashboardScreen() {
         visible={showAddCamera}
         onClose={() => setShowAddCamera(false)}
         onAddCamera={handleAddCamera}
+      />
+
+      {/* Edit Camera / Replace Video Modal */}
+      <EditCameraModal
+        camera={editingCamera}
+        visible={!!editingCamera}
+        onClose={() => setEditingCamera(null)}
+        onUpdateCamera={handleUpdateCamera}
+        onDeleteCamera={handleDeleteCamera}
       />
     </View>
   );

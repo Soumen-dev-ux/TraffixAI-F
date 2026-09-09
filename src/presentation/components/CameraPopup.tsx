@@ -10,9 +10,10 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
+  onEditCamera?: (camera: Camera) => void;
 };
 
-export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimulateDetection }) => {
+export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimulateDetection, onEditCamera }) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
@@ -33,16 +34,11 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimul
     setIsDetecting(true);
     try {
       if (onSimulateDetection) {
-        onSimulateDetection(camera.id, 'WB12AB1234');
+        onSimulateDetection(camera.id);
       } else {
-        await CameraApi.dispatchDetection({
-          cameraId: camera.id,
-          plateNumber: 'WB12AB1234',
-          vehicleType: 'car',
-          color: 'White',
-        });
+        await CameraApi.triggerCameraDetection(camera.id);
       }
-      setDetectedNotice(`Vehicle WB12AB1234 detected at ${camera.name}! Route updated.`);
+      setDetectedNotice(`AI Detection scanned at ${camera.name}! Route updated.`);
       setTimeout(() => setDetectedNotice(null), 4000);
     } catch (err) {
       console.error('Failed to dispatch detection:', err);
@@ -93,13 +89,25 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimul
             {camera.name}
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.closeButton, { backgroundColor: colors.surfaceLight }]}
-          onPress={onClose}
-          hitSlop={8}
-        >
-          <Ionicons name="close" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {onEditCamera && (
+            <TouchableOpacity
+              style={[styles.closeButton, { backgroundColor: colors.surfaceLight }]}
+              onPress={() => onEditCamera(camera)}
+              hitSlop={8}
+              accessibilityLabel="Edit Camera / Video"
+            >
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.closeButton, { backgroundColor: colors.surfaceLight }]}
+            onPress={onClose}
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollBody}>
@@ -191,7 +199,7 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimul
           >
             <Ionicons name="scan-circle-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={styles.startFeedBtnText}>
-              {isDetecting ? 'Running AI Detection...' : 'Start Feed & Detect Vehicle (WB12AB1234)'}
+              {isDetecting ? 'Running AI Detection...' : '▶ Start AI Detection'}
             </Text>
           </TouchableOpacity>
         )}
