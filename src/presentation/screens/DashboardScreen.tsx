@@ -444,13 +444,19 @@ export default function DashboardScreen() {
     setVehicleError("");
   };
 
-  // MVP: Local-First Simulation of Vehicle Appearing at a Camera (Camera A -> Camera B)
-  const handleSimulateVehicleDetection = (cameraId: string, plateNumber: string = 'WB12AB1234') => {
+  // Simulation of Vehicle Appearing at a Camera (Camera A -> Camera B)
+  const handleSimulateVehicleDetection = (cameraId: string, plateNumber?: string) => {
     const cam = cameras.find((c) => c.id === cameraId);
     if (!cam) return;
 
+    // If no vehicle is selected/specified, trigger genuine AI camera detection!
+    if (!plateNumber || !plateNumber.trim()) {
+      handleTriggerCameraDetection(cameraId);
+      return;
+    }
+
     const detectedTime = new Date().toISOString();
-    const cleanPlate = plateNumber.trim().toUpperCase() || 'WB12AB1234';
+    const cleanPlate = plateNumber.trim().toUpperCase();
 
     // 1. Position vehicle at this camera
     const updatedVehicle: Vehicle = {
@@ -657,7 +663,7 @@ export default function DashboardScreen() {
           camera={selectedCamera}
           visible={!!selectedCamera}
           onClose={() => setSelectedCamera(null)}
-          onSimulateDetection={handleSimulateVehicleDetection}
+          onTriggerCameraDetection={handleTriggerCameraDetection}
           onEditCamera={(cam) => setEditingCamera(cam)}
         />
       </View>

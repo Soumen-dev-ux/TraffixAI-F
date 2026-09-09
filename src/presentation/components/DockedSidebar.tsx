@@ -198,7 +198,7 @@ export const DockedSidebar: React.FC<Props> = ({
             <Ionicons name="car-sport-outline" size={18} color={colors.accent} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search vehicle number (e.g. WB12AB1234)..."
+              placeholder="Search vehicle plate number..."
               placeholderTextColor={colors.textMuted}
               value={searchText}
               onChangeText={onSearchTextChange}
@@ -319,9 +319,6 @@ export const DockedSidebar: React.FC<Props> = ({
           <Text style={[styles.tabLabel, { color: activeTab === 'alerts' ? colors.text : colors.textSecondary }]}>
             Alerts
           </Text>
-          <View style={[styles.alertCountBadge, { backgroundColor: colors.accentRed }]}>
-            <Text style={styles.alertCountBadgeText}>2</Text>
-          </View>
         </TouchableOpacity>
       </View>
 
@@ -845,64 +842,14 @@ export const DockedSidebar: React.FC<Props> = ({
         {activeTab === 'alerts' && (
           <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
             <View style={styles.alertsContainer}>
-              {/* Alert 1: Cloned Plate Anomaly */}
-              <View style={[styles.alertCard, { backgroundColor: colors.surfaceLight, borderColor: colors.accentRed }]}>
-                <View style={styles.alertCardHeader}>
-                  <View style={[styles.alertIconBadge, { backgroundColor: colors.surface }]}>
-                    <Ionicons name="warning" size={18} color={colors.accentRed} />
-                  </View>
-                  <View style={styles.alertHeaderInfo}>
-                    <Text style={[styles.alertTypeTitle, { color: colors.accentRed }]}>CLONED PLATE DETECTED</Text>
-                    <Text style={[styles.alertTimestamp, { color: colors.textMuted }]}>2 min ago • Critical Anomaly</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.alertPlatePill, { backgroundColor: colors.surface, borderColor: colors.accentRed }]}>
-                  <Text style={[styles.alertPlateText, { color: colors.text }]}>WB12AB1234</Text>
-                  <Text style={[styles.alertPlateSub, { color: colors.textSecondary }]}>White Car</Text>
-                </View>
-
-                <Text style={[styles.alertDescription, { color: colors.textSecondary }]}>
-                  Simultaneous detection at <Text style={{ color: colors.text, fontWeight: '700' }}>Esplanade Crossing</Text> and <Text style={{ color: colors.text, fontWeight: '700' }}>Salt Lake Sector V</Text> within 30 seconds. Spatial-temporal velocity exceeds physical limits.
+              <View style={{ backgroundColor: colors.surfaceLight, borderColor: colors.border, borderWidth: 1, padding: 24, borderRadius: 12, alignItems: 'center', marginTop: 16 }}>
+                <Ionicons name="shield-checkmark" size={36} color={colors.accentGreen} style={{ marginBottom: 10 }} />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4, textAlign: 'center' }}>
+                  Surveillance Network Secure
                 </Text>
-
-                <TouchableOpacity
-                  style={[styles.alertActionBtn, { backgroundColor: colors.accentRed }]}
-                  onPress={() => onSelectQuickVehicle?.('WB12AB1234')}
-                >
-                  <Ionicons name="locate" size={14} color="#ffffff" />
-                  <Text style={styles.alertActionBtnText}>Inspect Trajectory</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Alert 2: Stolen / Hotlist Vehicle Match */}
-              <View style={[styles.alertCard, { backgroundColor: colors.surfaceLight, borderColor: colors.accentAmber }]}>
-                <View style={styles.alertCardHeader}>
-                  <View style={[styles.alertIconBadge, { backgroundColor: colors.surface }]}>
-                    <Ionicons name="shield-half" size={18} color={colors.accentAmber} />
-                  </View>
-                  <View style={styles.alertHeaderInfo}>
-                    <Text style={[styles.alertTypeTitle, { color: colors.accentAmber }]}>HOTLIST / STOLEN MATCH</Text>
-                    <Text style={[styles.alertTimestamp, { color: colors.textMuted }]}>7 min ago • Wanted Notice</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.alertPlatePill, { backgroundColor: colors.surface, borderColor: colors.accentAmber }]}>
-                  <Text style={[styles.alertPlateText, { color: colors.text }]}>WB18GH3456</Text>
-                  <Text style={[styles.alertPlateSub, { color: colors.textSecondary }]}>Red Truck</Text>
-                </View>
-
-                <Text style={[styles.alertDescription, { color: colors.textSecondary }]}>
-                  Flagged in West Bengal Police FIR-2026-BEL-04 (Commercial Cargo Theft). Last observed crossing <Text style={{ color: colors.text, fontWeight: '700' }}>Howrah Bridge</Text> heading East.
+                <Text style={{ fontSize: 12, color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }}>
+                  No active plate cloning or velocity anomalies detected across monitored cameras.
                 </Text>
-
-                <TouchableOpacity
-                  style={[styles.alertActionBtn, { backgroundColor: colors.surface, borderColor: colors.accentAmber, borderWidth: 1 }]}
-                  onPress={() => onSelectQuickVehicle?.('WB18GH3456')}
-                >
-                  <Ionicons name="navigate" size={14} color={colors.accentAmber} />
-                  <Text style={[styles.alertActionBtnText, { color: colors.accentAmber }]}>Track Live Waypoints</Text>
-                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>

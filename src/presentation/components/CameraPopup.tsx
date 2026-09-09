@@ -9,11 +9,11 @@ type Props = {
   camera: Camera | null;
   visible: boolean;
   onClose: () => void;
-  onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
+  onTriggerCameraDetection?: (cameraId: string) => Promise<void> | void;
   onEditCamera?: (camera: Camera) => void;
 };
 
-export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimulateDetection, onEditCamera }) => {
+export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onTriggerCameraDetection, onEditCamera }) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
@@ -33,15 +33,15 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimul
     if (!camera) return;
     setIsDetecting(true);
     try {
-      if (onSimulateDetection) {
-        onSimulateDetection(camera.id);
+      if (onTriggerCameraDetection) {
+        await onTriggerCameraDetection(camera.id);
       } else {
-        await CameraApi.triggerCameraDetection(camera.id);
+        await CameraApi.triggerCameraDetection(camera.id, 'auto');
       }
-      setDetectedNotice(`AI Detection scanned at ${camera.name}! Route updated.`);
+      setDetectedNotice(`AI Detection active at ${camera.name}! Scanning video...`);
       setTimeout(() => setDetectedNotice(null), 4000);
     } catch (err) {
-      console.error('Failed to dispatch detection:', err);
+      console.error('Failed to trigger AI detection:', err);
     } finally {
       setIsDetecting(false);
     }

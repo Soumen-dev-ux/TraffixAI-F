@@ -1,6 +1,5 @@
 import { RealtimeEvent } from "../../domain/models/RealtimeEvent";
 import { RealtimeRepository } from "./RealtimeRepository";
-import { MockRealtimeRepository } from "./MockRealtimeRepository";
 
 const DEFAULT_WS_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000')
   .replace(/^http/, 'ws')
@@ -9,13 +8,11 @@ const DEFAULT_WS_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:800
 export class WebSocketRealtimeRepository implements RealtimeRepository {
   private ws: WebSocket | null = null;
   private wsUrl: string;
-  private mockFallback: MockRealtimeRepository;
-  private mockUnsub: (() => void) | null = null;
   private isWsActive = false;
+  private reconnectTimer: any = null;
 
   constructor(wsUrl: string = DEFAULT_WS_URL) {
     this.wsUrl = wsUrl;
-    this.mockFallback = new MockRealtimeRepository();
   }
 
   subscribe(callback: (event: RealtimeEvent) => void): () => void {
@@ -29,17 +26,24 @@ export class WebSocketRealtimeRepository implements RealtimeRepository {
 
         this.ws.onopen = () => {
           this.isWsActive = true;
-          // Disconnect mock fallback if it was active
-          if (this.mockUnsub) {
-            this.mockUnsub();
-            this.mockUnsub = null;
+          if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
           }
         };
 
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'vehicle_detection' || data.type === 'traffic_update' || data.type === 'camera_status') {
+            if (
+              data.type === 'vehicle_detection' ||
+              data.type === 'traffic_update' ||
+              data.type === 'camera_status' ||
+              data.type === 'camera_added' ||
+              data.type === 'camera_updated' ||
+              data.type === 'camera_deleted' ||
+              data.type === 'cameras_reset'
+            ) {
               callback({
                 id: data.id || `WS_EVT_${Date.now()}`,
                 type: data.type,
@@ -53,26 +57,26 @@ export class WebSocketRealtimeRepository implements RealtimeRepository {
         };
 
         this.ws.onerror = () => {
-          // If WS fails, start fallback mock stream
-          if (!this.isWsActive && !this.mockUnsub && isSubscribed) {
-            this.mockUnsub = this.mockFallback.subscribe(callback);
-          }
+          this.isWsActive = false;
         };
 
         this.ws.onclose = () => {
           this.isWsActive = false;
-          // Trigger fallback while reconnecting
-          if (!this.mockUnsub && isSubscribed) {
-            this.mockUnsub = this.mockFallback.subscribe(callback);
-          }
-          // Reconnect attempt after 5 seconds
-          if (isSubscribed) {
-            setTimeout(connectWs, 5000);
+          // Reconnect cleanly with zero fake demo fallbacks
+          if (isSubscribed && !this.reconnectTimer) {
+            this.reconnectTimer = setTimeout(() => {
+              this.reconnectTimer = null;
+              connectWs();
+            }, 3000);
           }
         };
       } catch (err) {
-        if (!this.mockUnsub && isSubscribed) {
-          this.mockUnsub = this.mockFallback.subscribe(callback);
+        this.isWsActive = false;
+        if (isSubscribed && !this.reconnectTimer) {
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            connectWs();
+          }, 3000);
         }
       }
     };
@@ -81,9 +85,9 @@ export class WebSocketRealtimeRepository implements RealtimeRepository {
 
     return () => {
       isSubscribed = false;
-      if (this.mockUnsub) {
-        this.mockUnsub();
-        this.mockUnsub = null;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
       }
       if (this.ws) {
         try {
