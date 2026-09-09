@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { StyleSheet, View, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -36,9 +36,13 @@ export default function DashboardScreen() {
   const [cameras, setCameras] = useState<Camera[]>(CameraApi.defaultCameras);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
-  // Vehicle tracking & search
+  // Search state (Location search for Cameras; Vehicle search for Tracking)
   const [searchText, setSearchText] = useState("");
+  const [locationSearchText, setLocationSearchText] = useState("");
+  const [focusLocation, setFocusLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const vehicleRef = useRef<Vehicle | null>(null);
+  vehicleRef.current = vehicle;
   const [vehicleLoading, setVehicleLoading] = useState(false);
   const [vehicleError, setVehicleError] = useState("");
   const [trajectory, setTrajectory] = useState<VehicleTrajectory | null>(null);
@@ -148,40 +152,43 @@ export default function DashboardScreen() {
           ]);
 
           // 4. Automatically position car on map & render multi-camera trajectory route
-          const newVehicle: Vehicle = {
-            id: d.vehicleId || `VH_${plate}`,
-            plateNumber: plate,
-            vehicleType: vType,
-            color: d.color || 'White',
-            latitude: Number(d.latitude || 22.5535),
-            longitude: Number(d.longitude || 88.3525),
-            cameraId: camId,
-            cameraName: camName,
-            detectedAt,
-            speed: d.speed || 45,
-          };
-          setVehicle(newVehicle);
+          // Only auto-update if matching active vehicle or if no vehicle is currently active
+          if (!vehicleRef.current || vehicleRef.current.plateNumber === plate) {
+            const newVehicle: Vehicle = {
+              id: d.vehicleId || `VH_${plate}`,
+              plateNumber: plate,
+              vehicleType: vType,
+              color: d.color || 'White',
+              latitude: Number(d.latitude || 22.5535),
+              longitude: Number(d.longitude || 88.3525),
+              cameraId: camId,
+              cameraName: camName,
+              detectedAt,
+              speed: d.speed || 45,
+            };
+            setVehicle(newVehicle);
 
-          if (d.trajectory && Array.isArray(d.trajectory.detections) && d.trajectory.detections.length > 0) {
-            setTrajectory(d.trajectory);
-          } else {
-            setTrajectory((prevTraj) => {
-              const prevPoints = prevTraj && prevTraj.plateNumber === plate ? prevTraj.detections : [];
-              const newPoint = {
-                id: `DET_${Date.now()}`,
-                cameraId: camId,
-                cameraName: camName,
-                latitude: newVehicle.latitude,
-                longitude: newVehicle.longitude,
-                detectedAt,
-              };
-              return {
-                vehicleId: newVehicle.id,
-                plateNumber: plate,
-                vehicleType: vType,
-                detections: [...prevPoints.filter((p) => p.cameraId !== camId), newPoint],
-              };
-            });
+            if (d.trajectory && Array.isArray(d.trajectory.detections) && d.trajectory.detections.length > 0) {
+              setTrajectory(d.trajectory);
+            } else {
+              setTrajectory((prevTraj) => {
+                const prevPoints = prevTraj && prevTraj.plateNumber === plate ? prevTraj.detections : [];
+                const newPoint = {
+                  id: `DET_${Date.now()}`,
+                  cameraId: camId,
+                  cameraName: camName,
+                  latitude: newVehicle.latitude,
+                  longitude: newVehicle.longitude,
+                  detectedAt,
+                };
+                return {
+                  vehicleId: newVehicle.id,
+                  plateNumber: plate,
+                  vehicleType: vType,
+                  detections: [...prevPoints.filter((p) => p.cameraId !== camId), newPoint],
+                };
+              });
+            }
           }
         }
       }
@@ -293,6 +300,55 @@ export default function DashboardScreen() {
 
   const handleCameraPress = (camera: Camera) => {
     setSelectedCamera(camera);
+    setFocusLocation({ latitude: camera.latitude, longitude: camera.longitude });
+  };
+
+  const handleLocationSearch = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+
+    // 1. Check if matches any existing camera by name, id, or direction
+    const matchedCam = cameras.find(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q) ||
+        (c.direction && c.direction.toLowerCase().includes(q))
+    );
+    if (matchedCam) {
+      setSelectedCamera(matchedCam);
+      setFocusLocation({ latitude: matchedCam.latitude, longitude: matchedCam.longitude });
+      return;
+    }
+
+    // 2. Check known Kolkata city localities
+    const kolkataLocations: Record<string, { latitude: number; longitude: number; name: string }> = {
+      'park street': { latitude: 22.5535, longitude: 88.3525, name: 'Park Street Junction' },
+      'park': { latitude: 22.5535, longitude: 88.3525, name: 'Park Street Junction' },
+      'esplanade': { latitude: 22.5646, longitude: 88.3512, name: 'Esplanade Crossing' },
+      'dharmatala': { latitude: 22.5646, longitude: 88.3512, name: 'Esplanade Crossing' },
+      'salt lake': { latitude: 22.5769, longitude: 88.4331, name: 'Salt Lake Sector V' },
+      'sector v': { latitude: 22.5769, longitude: 88.4331, name: 'Salt Lake Sector V' },
+      'bidhannagar': { latitude: 22.5769, longitude: 88.4331, name: 'Salt Lake Sector V' },
+      'howrah': { latitude: 22.5958, longitude: 88.3476, name: 'Howrah Bridge' },
+      'howrah bridge': { latitude: 22.5958, longitude: 88.3476, name: 'Howrah Bridge' },
+      'gariahat': { latitude: 22.5186, longitude: 88.3654, name: 'Gariahat Junction' },
+      'shyambazar': { latitude: 22.6033, longitude: 88.3708, name: 'Shyambazar' },
+      'new town': { latitude: 22.5867, longitude: 88.4754, name: 'New Town' },
+      'victoria': { latitude: 22.5448, longitude: 88.3426, name: 'Victoria Memorial' },
+    };
+
+    for (const [key, loc] of Object.entries(kolkataLocations)) {
+      if (key.includes(q) || q.includes(key)) {
+        setFocusLocation({ latitude: loc.latitude, longitude: loc.longitude });
+        const closeCam = cameras.find(
+          (c) => Math.abs(c.latitude - loc.latitude) < 0.02 && Math.abs(c.longitude - loc.longitude) < 0.02
+        );
+        if (closeCam) {
+          setSelectedCamera(closeCam);
+        }
+        return;
+      }
+    }
   };
 
   const handleClearVehicle = () => {
@@ -300,6 +356,95 @@ export default function DashboardScreen() {
     setTrajectory(null);
     setSearchText("");
     setVehicleError("");
+  };
+
+  // MVP: Local-First Simulation of Vehicle Appearing at a Camera (Camera A -> Camera B)
+  const handleSimulateVehicleDetection = (cameraId: string, plateNumber: string = 'WB12AB1234') => {
+    const cam = cameras.find((c) => c.id === cameraId);
+    if (!cam) return;
+
+    const detectedTime = new Date().toISOString();
+    const cleanPlate = plateNumber.trim().toUpperCase() || 'WB12AB1234';
+
+    // 1. Position vehicle at this camera
+    const updatedVehicle: Vehicle = {
+      id: `VH_${cleanPlate}`,
+      plateNumber: cleanPlate,
+      vehicleType: 'car',
+      color: 'White',
+      latitude: cam.latitude,
+      longitude: cam.longitude,
+      cameraId: cam.id,
+      cameraName: cam.name,
+      detectedAt: detectedTime,
+      speed: Math.floor(38 + Math.random() * 20),
+    };
+    setVehicle(updatedVehicle);
+
+    // 2. Append new waypoint to multi-camera trajectory
+    setTrajectory((prevTraj) => {
+      const isSameVehicle = prevTraj && prevTraj.plateNumber === cleanPlate;
+      const prevDetections = isSameVehicle ? prevTraj.detections : [];
+
+      const lastPoint = prevDetections[prevDetections.length - 1];
+      if (lastPoint && lastPoint.cameraId === cam.id) {
+        return prevTraj;
+      }
+
+      const newPoint = {
+        id: `DET_${Date.now()}`,
+        cameraId: cam.id,
+        cameraName: cam.name,
+        latitude: cam.latitude,
+        longitude: cam.longitude,
+        detectedAt: detectedTime,
+      };
+
+      return {
+        vehicleId: updatedVehicle.id,
+        plateNumber: cleanPlate,
+        vehicleType: 'car',
+        detections: [...prevDetections, newPoint],
+      };
+    });
+
+    // 3. Increment camera vehicle counter locally
+    setCameras((prevCams) =>
+      prevCams.map((c) => {
+        if (c.id === cam.id) {
+          const newCount = (c.vehicleCount || 0) + 1;
+          return {
+            ...c,
+            vehicleCount: newCount,
+            trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
+          };
+        }
+        return c;
+      })
+    );
+
+    // 4. Update live detections feed
+    setLiveDetections((prev) => [
+      {
+        id: `LIVE_${Date.now()}`,
+        plateNumber: cleanPlate,
+        cameraName: cam.name,
+        detectedAt: detectedTime,
+        vehicleType: 'car',
+      },
+      ...prev.filter((p) => !(p.plateNumber === cleanPlate && p.cameraName === cam.name)).slice(0, 19),
+    ]);
+
+    // 5. Automatically switch active tab to 'tracking'
+    setActiveTab('tracking');
+
+    // 6. Asynchronous fire-and-forget sync to backend if online
+    CameraApi.dispatchDetection({
+      cameraId: cam.id,
+      plateNumber: cleanPlate,
+      vehicleType: 'car',
+      color: 'White',
+    }).catch(() => {});
   };
 
   return (
@@ -319,6 +464,9 @@ export default function DashboardScreen() {
           searchLoading={vehicleLoading}
           vehicleError={vehicleError}
           onClearVehicleError={() => setVehicleError("")}
+          locationSearchText={locationSearchText}
+          onLocationSearchTextChange={setLocationSearchText}
+          onLocationSearch={handleLocationSearch}
           vehicle={vehicle}
           trajectory={trajectory}
           onClearVehicle={handleClearVehicle}
@@ -336,6 +484,7 @@ export default function DashboardScreen() {
           onOpenAddCamera={() => setShowAddCamera(true)}
           onDeleteCamera={handleDeleteCamera}
           onResetCameras={handleResetCameras}
+          onSimulateDetection={handleSimulateVehicleDetection}
         />
       )}
 
@@ -348,6 +497,7 @@ export default function DashboardScreen() {
           onCameraPress={handleCameraPress}
           is3DView={is3DView}
           showHeatmap={showHeatmap}
+          focusLocation={focusLocation}
           style={StyleSheet.absoluteFill}
         />
 
@@ -386,6 +536,7 @@ export default function DashboardScreen() {
           camera={selectedCamera}
           visible={!!selectedCamera}
           onClose={() => setSelectedCamera(null)}
+          onSimulateDetection={handleSimulateVehicleDetection}
         />
       </View>
 

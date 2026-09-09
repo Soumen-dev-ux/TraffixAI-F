@@ -14,7 +14,7 @@ export class MockRealtimeRepository
       const event = this.generateEvent();
 
       callback(event);
-    }, 3000);
+    }, 8000);
 
     return () => {
       if (this.interval) {
@@ -80,12 +80,22 @@ export class MockRealtimeRepository
           )
         ];
 
+      const coords = {
+        CAM_001: { name: "Park Street Junction", lat: 22.5535, lng: 88.3525 },
+        CAM_002: { name: "Esplanade Crossing", lat: 22.5646, lng: 88.3512 },
+        CAM_003: { name: "Salt Lake Sector V", lat: 22.5769, lng: 88.4331 },
+        CAM_004: { name: "Howrah Bridge", lat: 22.5958, lng: 88.3476 },
+      }[cameraId] || { name: "Park Street Junction", lat: 22.5535, lng: 88.3525 };
+
       return {
         id: `EVENT_${Date.now()}`,
         type,
         timestamp: new Date().toISOString(),
         data: {
           cameraId,
+          cameraName: coords.name,
+          latitude: coords.lat,
+          longitude: coords.lng,
           vehicleId: `VEH_${Date.now()}`,
           plateNumber: "WB12AB1234",
           vehicleType,

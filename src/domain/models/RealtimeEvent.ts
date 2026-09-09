@@ -32,5 +32,11 @@ export type RealtimeEvent = {
       | "moderate"
       | "high"
       | "critical";
+
+    cameraName?: string;
+    latitude?: number;
+    longitude?: number;
+    trajectory?: any;
+    [key: string]: any;
   };
 };

@@ -14,6 +14,7 @@ type Props = {
   onCameraPress: (camera: Camera) => void;
   is3DView?: boolean;
   showHeatmap?: boolean;
+  focusLocation?: { latitude: number; longitude: number } | null;
   style?: any;
 };
 
@@ -24,6 +25,7 @@ export default function CityMap({
   onCameraPress,
   is3DView = true,
   showHeatmap = true,
+  focusLocation = null,
   style,
 }: Props) {
   const webViewRef = useRef<WebView>(null);
@@ -38,6 +40,8 @@ export default function CityMap({
   showHeatmapRef.current = showHeatmap;
   const is3DViewRef = useRef(is3DView);
   is3DViewRef.current = is3DView;
+  const focusLocationRef = useRef(focusLocation);
+  focusLocationRef.current = focusLocation;
   const onCameraPressRef = useRef(onCameraPress);
   onCameraPressRef.current = onCameraPress;
 
@@ -54,6 +58,7 @@ export default function CityMap({
       trajectory: trajectoryRef.current,
       showHeatmap: showHeatmapRef.current,
       is3DView: is3DViewRef.current,
+      focusLocation: focusLocationRef.current,
       heatmapPoints,
     };
 
@@ -88,7 +93,7 @@ export default function CityMap({
 
   useEffect(() => {
     sendMapUpdate();
-  }, [cameras, vehicle, trajectory, showHeatmap, is3DView]);
+  }, [cameras, vehicle, trajectory, showHeatmap, is3DView, focusLocation]);
 
   return (
     <View style={[styles.container, style]}>

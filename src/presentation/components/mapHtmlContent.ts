@@ -177,10 +177,40 @@ export function getMapHtmlContent(): string {
     .maplibregl-ctrl-icon {
       filter: invert(1) brightness(0.8);
     }
+    #traffix-route-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      overflow: visible;
+    }
+    @keyframes routePulseAnim {
+      from { stroke-dashoffset: 48; }
+      to { stroke-dashoffset: 0; }
+    }
+    .route-pulse-line {
+      animation: routePulseAnim 1.2s linear infinite;
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <div id="map">
+    <svg id="traffix-route-svg">
+      <defs>
+        <filter id="route-laser-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#10b981" flood-opacity="0.95"/>
+          <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#06b6d4" flood-opacity="0.75"/>
+        </filter>
+      </defs>
+      <path id="svg-route-casing" d="" fill="none" stroke="#020617" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+      <path id="svg-route-glow" d="" fill="none" stroke="#10b981" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" filter="url(#route-laser-glow)" />
+      <path id="svg-route-core" d="" fill="none" stroke="#06b6d4" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="1.0" />
+      <path id="svg-route-pulse" d="" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="10 14" opacity="0.95" class="route-pulse-line" />
+    </svg>
+  </div>
   <script>
     var activeLineCoords = [];
     var routeCache = {};
@@ -219,6 +249,107 @@ export function getMapHtmlContent(): string {
       }
     }
 
+    function generateSmoothRoute(points) {
+      if (!points || points.length < 2) return [];
+      var clean = [];
+      for (var k = 0; k < points.length; k++) {
+        var pt = points[k];
+        if (pt && !isNaN(pt[0]) && !isNaN(pt[1])) {
+          clean.push([Number(pt[0]), Number(pt[1])]);
+        }
+      }
+      if (clean.length < 2) return clean;
+      if (clean.length === 2) {
+        var p1 = clean[0], p2 = clean[1];
+        var line = [];
+        var steps = 16;
+        for (var i = 0; i <= steps; i++) {
+          var t = i / steps;
+          line.push([
+            p1[0] + (p2[0] - p1[0]) * t,
+            p1[1] + (p2[1] - p1[1]) * t
+          ]);
+        }
+        return line;
+      }
+      var result = [];
+      var pts = clean.slice();
+      var full = [pts[0]].concat(pts, [pts[pts.length - 1]]);
+      for (var i = 1; i < full.length - 2; i++) {
+        var p0 = full[i - 1], p1 = full[i], p2 = full[i + 1], p3 = full[i + 2];
+        var segments = 16;
+        for (var j = 0; j <= segments; j++) {
+          var t = j / segments;
+          var t2 = t * t;
+          var t3 = t2 * t;
+          var x = 0.5 * ((2 * p1[0]) +
+            (-p0[0] + p2[0]) * t +
+            (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+            (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+          var y = 0.5 * ((2 * p1[1]) +
+            (-p0[1] + p2[1]) * t +
+            (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+            (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+          result.push([x, y]);
+        }
+      }
+      return result;
+    }
+
+    function ensureSvgOverlay() {
+      var mapDiv = document.getElementById('map');
+      if (!mapDiv) return;
+      var svg = document.getElementById('traffix-route-svg');
+      if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.id = 'traffix-route-svg';
+        svg.setAttribute('class', 'route-svg-layer');
+        svg.innerHTML = '<defs>' +
+          '<filter id="route-laser-glow" x="-30%" y="-30%" width="160%" height="160%">' +
+            '<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#10b981" flood-opacity="0.95"/>' +
+            '<feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#06b6d4" flood-opacity="0.75"/>' +
+          '</filter>' +
+        '</defs>' +
+        '<path id="svg-route-casing" d="" fill="none" stroke="#020617" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />' +
+        '<path id="svg-route-glow" d="" fill="none" stroke="#10b981" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" filter="url(#route-laser-glow)" />' +
+        '<path id="svg-route-core" d="" fill="none" stroke="#06b6d4" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="1.0" />' +
+        '<path id="svg-route-pulse" d="" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="10 14" opacity="0.95" class="route-pulse-line" />';
+        mapDiv.appendChild(svg);
+      }
+    }
+
+    function renderSvgRoute() {
+      ensureSvgOverlay();
+      if (!map) return;
+      var casing = document.getElementById('svg-route-casing');
+      var glow = document.getElementById('svg-route-glow');
+      var core = document.getElementById('svg-route-core');
+      var pulse = document.getElementById('svg-route-pulse');
+      if (!casing || !glow || !core || !pulse) return;
+
+      if (!activeLineCoords || activeLineCoords.length < 2) {
+        casing.setAttribute('d', '');
+        glow.setAttribute('d', '');
+        core.setAttribute('d', '');
+        pulse.setAttribute('d', '');
+        return;
+      }
+
+      var d = '';
+      for (var i = 0; i < activeLineCoords.length; i++) {
+        var c = activeLineCoords[i];
+        if (!c || c.length < 2 || isNaN(c[0]) || isNaN(c[1])) continue;
+        var pt = map.project(c);
+        if (!pt || isNaN(pt.x) || isNaN(pt.y)) continue;
+        d += (d === '' ? 'M ' : ' L ') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1);
+      }
+
+      casing.setAttribute('d', d);
+      glow.setAttribute('d', d);
+      core.setAttribute('d', d);
+      pulse.setAttribute('d', d);
+    }
+
     function updateTrajectorySource() {
       if (!map) return;
       var src = map.getSource('trajectory-source');
@@ -243,11 +374,13 @@ export function getMapHtmlContent(): string {
     }
 
     function applyRouteCoordinates(coords, shouldFitBounds) {
-      activeLineCoords = coords || [];
+      activeLineCoords = (coords && coords.length > 0) ? coords : [];
+      renderSvgRoute();
       updateTrajectorySource();
 
       if (map) {
         map.once('idle', function() {
+          renderSvgRoute();
           updateTrajectorySource();
         });
       }
@@ -309,71 +442,6 @@ export function getMapHtmlContent(): string {
           minzoom: 0,
           maxzoom: 22
         },
-        // Ground-level Native WebGL Trajectory Layers (rendered on asphalt below 3D buildings)
-        {
-          id: 'trajectory-casing-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#050b14',
-            'line-width': [
-              'interpolate', ['linear'], ['zoom'],
-              10, 7,
-              14, 10,
-              17, 14
-            ],
-            'line-opacity': 0.92
-          }
-        },
-        {
-          id: 'trajectory-glow-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#10b981',
-            'line-width': [
-              'interpolate', ['linear'], ['zoom'],
-              10, 4.5,
-              14, 7,
-              17, 10
-            ],
-            'line-opacity': 0.95
-          }
-        },
-        {
-          id: 'trajectory-core-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#38bdf8',
-            'line-width': [
-              'interpolate', ['linear'], ['zoom'],
-              10, 2,
-              14, 3.2,
-              17, 5
-            ],
-            'line-opacity': 1.0
-          }
-        },
-        {
-          id: 'trajectory-highlight-layer',
-          type: 'line',
-          source: 'trajectory-source',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': [
-              'interpolate', ['linear'], ['zoom'],
-              10, 0.8,
-              14, 1.4,
-              17, 2
-            ],
-            'line-opacity': 0.95
-          }
-        },
         {
           id: '3d-buildings-layer',
           type: 'fill-extrusion',
@@ -387,11 +455,7 @@ export function getMapHtmlContent(): string {
               30, '#e2e8f0',
               45, '#cbd5e1'
             ],
-            'fill-extrusion-height': [
-              'interpolate', ['linear'], ['zoom'],
-              13, 0,
-              14.5, ['get', 'height']
-            ],
+            'fill-extrusion-height': ['get', 'height'],
             'fill-extrusion-base': 0,
             'fill-extrusion-opacity': 0.85
           }
@@ -414,7 +478,72 @@ export function getMapHtmlContent(): string {
               1.0, '#ef4444'
             ],
             'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 15, 38],
-            'heatmap-opacity': 0.72
+            'heatmap-opacity': 0.65
+          }
+        },
+        // Elevated Native WebGL Trajectory Layers (rendered on top of 3D buildings & heatmaps for 100% visibility)
+        {
+          id: 'trajectory-casing-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#050b14',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 8,
+              14, 12,
+              17, 16
+            ],
+            'line-opacity': 0.95
+          }
+        },
+        {
+          id: 'trajectory-glow-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#10b981',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 5.5,
+              14, 8.5,
+              17, 12
+            ],
+            'line-opacity': 0.95
+          }
+        },
+        {
+          id: 'trajectory-core-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#06b6d4',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 3,
+              14, 5,
+              17, 7
+            ],
+            'line-opacity': 1.0
+          }
+        },
+        {
+          id: 'trajectory-highlight-layer',
+          type: 'line',
+          source: 'trajectory-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 1.2,
+              14, 2,
+              17, 3
+            ],
+            'line-opacity': 1.0
           }
         }
       ]
@@ -485,13 +614,22 @@ export function getMapHtmlContent(): string {
       } catch(e) {}
       setupReady();
       updateTrajectorySource();
+      renderSvgRoute();
     });
 
     map.on('load', function() {
       setupReady();
       updateTrajectorySource();
+      renderSvgRoute();
       setTimeout(lazyLoadBuildings, 1200);
     });
+
+    map.on('render', renderSvgRoute);
+    map.on('move', renderSvgRoute);
+    map.on('zoom', renderSvgRoute);
+    map.on('pitch', renderSvgRoute);
+    map.on('rotate', renderSvgRoute);
+    map.on('resize', renderSvgRoute);
 
     // Fallback: If style.load or load delays due to network/tile issues, initialize immediately
     setTimeout(function() {
@@ -511,6 +649,18 @@ export function getMapHtmlContent(): string {
       var showHeatmap = data.showHeatmap;
       var heatmapPoints = data.heatmapPoints || [];
       var is3D = data.is3DView !== undefined ? data.is3DView : true;
+      var focusLocation = data.focusLocation;
+
+      // Smooth flyTo location when user searches a location or camera
+      if (focusLocation && !isNaN(focusLocation.latitude) && !isNaN(focusLocation.longitude)) {
+        map.flyTo({
+          center: [Number(focusLocation.longitude), Number(focusLocation.latitude)],
+          zoom: 15.5,
+          pitch: is3DCurrent ? 50 : 0,
+          bearing: is3DCurrent ? -18 : 0,
+          duration: 1200
+        });
+      }
 
       // Smooth camera perspective pitch transition & building visibility toggle
       if (is3D !== is3DCurrent) {
@@ -577,15 +727,24 @@ export function getMapHtmlContent(): string {
 
       var detections = (trajectory && trajectory.detections) || [];
 
-      // Deduplicate consecutive identical coordinates
+      // Deduplicate consecutive identical coordinates and validate numbers
       var uniquePoints = [];
       for (var i = 0; i < detections.length; i++) {
         var pt = detections[i];
         if (pt && !isNaN(pt.latitude) && !isNaN(pt.longitude)) {
+          var lat = Number(pt.latitude);
+          var lng = Number(pt.longitude);
           if (uniquePoints.length === 0 ||
-              Math.abs(uniquePoints[uniquePoints.length - 1].latitude - pt.latitude) > 0.0001 ||
-              Math.abs(uniquePoints[uniquePoints.length - 1].longitude - pt.longitude) > 0.0001) {
-            uniquePoints.push(pt);
+              Math.abs(uniquePoints[uniquePoints.length - 1].latitude - lat) > 0.0001 ||
+              Math.abs(uniquePoints[uniquePoints.length - 1].longitude - lng) > 0.0001) {
+            uniquePoints.push({
+              id: pt.id || ('pt_' + i),
+              cameraId: pt.cameraId,
+              cameraName: pt.cameraName,
+              latitude: lat,
+              longitude: lng,
+              detectedAt: pt.detectedAt
+            });
           }
         }
       }
@@ -609,42 +768,41 @@ export function getMapHtmlContent(): string {
       });
 
       if (uniquePoints.length >= 2) {
-        // Limit active routing traversal to latest 6 checkpoints to keep route clean and fast
-        var routingPoints = uniquePoints.length > 6 ? uniquePoints.slice(-6) : uniquePoints;
-        var cacheKey = routingPoints.map(function(p) {
-          return p.longitude.toFixed(5) + ',' + p.latitude.toFixed(5);
+        var routingPoints = uniquePoints.length > 16 ? uniquePoints.slice(-16) : uniquePoints;
+        var directCoords = routingPoints.map(function(p) { return [Number(p.longitude), Number(p.latitude)]; });
+        var smoothCoords = generateSmoothRoute(directCoords);
+
+        var cacheKey = directCoords.map(function(p) {
+          return p[0].toFixed(5) + ',' + p[1].toFixed(5);
         }).join(';');
         currentActiveCacheKey = cacheKey;
 
-        var directCoords = routingPoints.map(function(p) { return [p.longitude, p.latitude]; });
+        // 1. Immediately display the smooth trajectory route (0ms latency, zero lag!)
+        applyRouteCoordinates(routeCache[cacheKey] || smoothCoords, true);
 
-        if (routeCache[cacheKey]) {
-          applyRouteCoordinates(routeCache[cacheKey], true);
-        } else {
-          // Immediately display direct route so user NEVER sees a blank map
-          applyRouteCoordinates(directCoords, false);
-
-          // Query OSRM Driving Road Network to snap directly along actual Kolkata streets with full road curvature
-          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=full&geometries=geojson';
-          fetch(osrmUrl)
-            .then(function(res) { return res.json(); })
-            .then(function(resData) {
-              if (resData && resData.code === 'Ok' && resData.routes && resData.routes[0] && resData.routes[0].geometry) {
-                var rawCoords = resData.routes[0].geometry.coordinates;
-                // Cartographic Ramer-Douglas-Peucker simplification:
-                // Preserves 100% of curves, turns, roundabouts, and flyovers accurate to within 2.5m,
-                // while stripping redundant collinear straight-line points for 60 FPS performance.
-                var epsDeg = 2.5 / 106000;
-                var roadCoords = rdpSimplify(rawCoords, epsDeg * epsDeg);
-                routeCache[cacheKey] = roadCoords;
-                if (currentActiveCacheKey === cacheKey) {
-                  applyRouteCoordinates(roadCoords, true);
+        // 2. Non-blocking OSRM progressive background fetch (only when not cached)
+        if (!routeCache[cacheKey]) {
+          try {
+            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + cacheKey + '?overview=simplified&geometries=geojson';
+            var abortCtrl = new AbortController();
+            var timerId = setTimeout(function() { abortCtrl.abort(); }, 800);
+            fetch(osrmUrl, { signal: abortCtrl.signal })
+              .then(function(res) { clearTimeout(timerId); return res.json(); })
+              .then(function(resData) {
+                if (resData && resData.code === 'Ok' && resData.routes && resData.routes[0] && resData.routes[0].geometry) {
+                  var roadCoords = resData.routes[0].geometry.coordinates;
+                  if (roadCoords && roadCoords.length > 1) {
+                    routeCache[cacheKey] = roadCoords;
+                    if (currentActiveCacheKey === cacheKey) {
+                      applyRouteCoordinates(roadCoords, false);
+                    }
+                  }
                 }
-              }
-            })
-            .catch(function(err) {
-              console.warn('OSRM road snapping fallback to direct route:', err);
-            });
+              })
+              .catch(function() {
+                // Silently keep smoothCoords - zero interruption, zero lag!
+              });
+          } catch(e) {}
         }
       } else {
         currentActiveCacheKey = '';

@@ -29,6 +29,9 @@ type Props = {
   searchLoading: boolean;
   vehicleError: string;
   onClearVehicleError: () => void;
+  locationSearchText?: string;
+  onLocationSearchTextChange?: (text: string) => void;
+  onLocationSearch?: (locationQuery: string) => void;
   vehicle: Vehicle | null;
   trajectory: VehicleTrajectory | null;
   onClearVehicle: () => void;
@@ -43,6 +46,7 @@ type Props = {
   onOpenAddCamera?: () => void;
   onDeleteCamera?: (cameraId: string) => void;
   onResetCameras?: (mode: 'clear' | 'reset') => void;
+  onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
 };
 
 const formatDisplayTime = (timeVal?: string | null) => {
@@ -68,6 +72,9 @@ export const DockedSidebar: React.FC<Props> = ({
   searchLoading,
   vehicleError,
   onClearVehicleError,
+  locationSearchText,
+  onLocationSearchTextChange,
+  onLocationSearch,
   vehicle,
   trajectory,
   onClearVehicle,
@@ -82,13 +89,25 @@ export const DockedSidebar: React.FC<Props> = ({
   onOpenAddCamera,
   onDeleteCamera,
   onResetCameras,
+  onSimulateDetection,
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [localLocationSearch, setLocalLocationSearch] = useState('');
+
+  const locQuery = locationSearchText !== undefined ? locationSearchText : localLocationSearch;
+  const setLocQuery = onLocationSearchTextChange || setLocalLocationSearch;
 
   const filteredCameras = cameras.filter((camera) => {
     if (filter === 'online') return camera.status === 'online';
     if (filter === 'high') return camera.trafficLevel === 'high' || camera.trafficLevel === 'critical';
+    if (locQuery.trim()) {
+      const q = locQuery.trim().toLowerCase();
+      const matchName = camera.name.toLowerCase().includes(q);
+      const matchId = camera.id.toLowerCase().includes(q);
+      const matchDir = camera.direction ? camera.direction.toLowerCase().includes(q) : false;
+      return matchName || matchId || matchDir;
+    }
     return true;
   });
 
@@ -168,30 +187,62 @@ export const DockedSidebar: React.FC<Props> = ({
         </View>
       </View>
 
-      {/* 2. Integrated Search Bar */}
+      {/* 2. Dynamic Search Bar (Vehicle Search on Tracking tab; Location/Camera Search on other tabs) */}
       <View style={[styles.searchSection, { borderBottomColor: colors.border }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search vehicle number..."
-            placeholderTextColor={colors.textMuted}
-            value={searchText}
-            onChangeText={onSearchTextChange}
-            onSubmitEditing={onSearch}
-            autoCapitalize="characters"
-          />
-          {searchLoading ? (
-            <ActivityIndicator size="small" color={colors.accent} style={styles.searchSubmitBtn} />
-          ) : (
-            <TouchableOpacity onPress={onSearch} style={styles.searchSubmitBtn}>
+        {activeTab === 'tracking' ? (
+          <View style={[styles.searchBox, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+            <Ionicons name="car-sport-outline" size={18} color={colors.accent} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search vehicle number (e.g. WB12AB1234)..."
+              placeholderTextColor={colors.textMuted}
+              value={searchText}
+              onChangeText={onSearchTextChange}
+              onSubmitEditing={onSearch}
+              autoCapitalize="characters"
+            />
+            {searchLoading ? (
+              <ActivityIndicator size="small" color={colors.accent} style={styles.searchSubmitBtn} />
+            ) : (
+              <TouchableOpacity onPress={onSearch} style={styles.searchSubmitBtn} accessibilityLabel="Search Vehicle">
+                <Ionicons name="arrow-forward" size={18} color={colors.accent} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={[styles.searchBox, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+            <Ionicons name="location-outline" size={18} color={colors.accent} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search location or camera (e.g. Park Street)..."
+              placeholderTextColor={colors.textMuted}
+              value={locQuery}
+              onChangeText={setLocQuery}
+              onSubmitEditing={() => onLocationSearch?.(locQuery)}
+              autoCapitalize="words"
+            />
+            {locQuery.trim().length > 0 ? (
+              <TouchableOpacity
+                onPress={() => setLocQuery('')}
+                style={{ paddingHorizontal: 6 }}
+                hitSlop={8}
+                accessibilityLabel="Clear location search"
+              >
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              onPress={() => onLocationSearch?.(locQuery)}
+              style={styles.searchSubmitBtn}
+              accessibilityLabel="Search Location"
+            >
               <Ionicons name="arrow-forward" size={18} color={colors.accent} />
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Error Banner */}
-        {vehicleError ? (
+        {/* Error Banner for vehicle search */}
+        {activeTab === 'tracking' && vehicleError ? (
           <View style={[styles.errorBanner, { backgroundColor: colors.surfaceLight, borderColor: colors.accentRed }]}>
             <Ionicons name="alert-circle" size={16} color={colors.accentRed} />
             <Text style={[styles.errorBannerText, { color: colors.text }]}>{vehicleError}</Text>
@@ -275,6 +326,61 @@ export const DockedSidebar: React.FC<Props> = ({
         {/* TAB 1: CAMERAS LIST */}
         {activeTab === 'cameras' && (
           <View style={styles.tabContentContainer}>
+            {/* MVP Route Simulator (Camera A -> Camera B) */}
+            <View style={[styles.mvpSimulatorBox, { backgroundColor: colors.surfaceLight, borderColor: colors.accent }]}>
+              <View style={styles.mvpHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="git-network-outline" size={15} color={colors.accent} />
+                  <Text style={[styles.mvpTitle, { color: colors.text }]}>MVP ROUTE SIMULATOR</Text>
+                </View>
+                {trajectory && trajectory.detections.length > 0 && (
+                  <TouchableOpacity onPress={onClearVehicle} style={styles.mvpResetBtn} hitSlop={6}>
+                    <Ionicons name="trash-outline" size={12} color={colors.accentRed} style={{ marginRight: 3 }} />
+                    <Text style={[styles.mvpResetText, { color: colors.accentRed }]}>Clear Route</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={[styles.mvpSub, { color: colors.textSecondary }]}>
+                Click cameras in order to simulate transit (Camera A ➔ Camera B):
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mvpCamScroll}>
+                {cameras.map((cam, idx) => {
+                  const isVisited = trajectory?.detections.some((d) => d.cameraId === cam.id);
+                  const isCurrent = vehicle?.cameraId === cam.id;
+                  return (
+                    <TouchableOpacity
+                      key={cam.id}
+                      style={[
+                        styles.mvpCamChip,
+                        {
+                          backgroundColor: isCurrent ? colors.accent : isVisited ? colors.surface : colors.surfaceLight,
+                          borderColor: isCurrent ? colors.accent : isVisited ? colors.accentGreen : colors.border,
+                        },
+                      ]}
+                      onPress={() => onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234')}
+                    >
+                      <Text
+                        style={[
+                          styles.mvpCamChipText,
+                          { color: isCurrent ? '#ffffff' : isVisited ? colors.accentGreen : colors.text },
+                        ]}
+                      >
+                        {idx + 1}. {cam.name.split(' ')[0]}
+                      </Text>
+                      {isVisited && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={12}
+                          color={isCurrent ? '#ffffff' : colors.accentGreen}
+                          style={{ marginLeft: 3 }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {/* Camera Actions Bar */}
             <View style={styles.cameraActionBar}>
               <TouchableOpacity
@@ -332,20 +438,37 @@ export const DockedSidebar: React.FC<Props> = ({
             {/* Cameras ScrollView */}
             <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
               {filteredCameras.length === 0 ? (
-                <View style={[styles.emptyCameraState, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
-                  <Ionicons name="videocam-off-outline" size={36} color={colors.textMuted} />
-                  <Text style={[styles.emptyCameraTitle, { color: colors.text }]}>No Cameras Deployed</Text>
-                  <Text style={[styles.emptyCameraSub, { color: colors.textMuted }]}>
-                    Click "+ Add Camera" to deploy a camera node by coordinates and assign video footage.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.addFirstCamBtn, { backgroundColor: colors.accent }]}
-                    onPress={onOpenAddCamera}
-                  >
-                    <Ionicons name="add" size={16} color="#ffffff" style={{ marginRight: 4 }} />
-                    <Text style={styles.addFirstCamBtnText}>Deploy First Camera</Text>
-                  </TouchableOpacity>
-                </View>
+                locQuery.trim().length > 0 ? (
+                  <View style={[styles.emptyCameraState, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+                    <Ionicons name="search-outline" size={34} color={colors.accent} />
+                    <Text style={[styles.emptyCameraTitle, { color: colors.text }]}>No Matching Cameras</Text>
+                    <Text style={[styles.emptyCameraSub, { color: colors.textMuted }]}>
+                      No camera location found matching "{locQuery}". Try searching "Park Street", "Esplanade", "Howrah", or "Salt Lake".
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.addFirstCamBtn, { backgroundColor: colors.accent }]}
+                      onPress={() => setLocQuery('')}
+                    >
+                      <Ionicons name="close-circle-outline" size={16} color="#ffffff" style={{ marginRight: 4 }} />
+                      <Text style={styles.addFirstCamBtnText}>Clear Search Filter</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={[styles.emptyCameraState, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+                    <Ionicons name="videocam-off-outline" size={36} color={colors.textMuted} />
+                    <Text style={[styles.emptyCameraTitle, { color: colors.text }]}>No Cameras Deployed</Text>
+                    <Text style={[styles.emptyCameraSub, { color: colors.textMuted }]}>
+                      Click "+ Add Camera" to deploy a camera node by coordinates and assign video footage.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.addFirstCamBtn, { backgroundColor: colors.accent }]}
+                      onPress={onOpenAddCamera}
+                    >
+                      <Ionicons name="add" size={16} color="#ffffff" style={{ marginRight: 4 }} />
+                      <Text style={styles.addFirstCamBtnText}>Deploy First Camera</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
               ) : (
                 filteredCameras.map((camera) => {
                   const isSelected = selectedCamera?.id === camera.id;
@@ -385,6 +508,20 @@ export const DockedSidebar: React.FC<Props> = ({
                         </View>
                       </View>
 
+                      {onSimulateDetection && (
+                        <TouchableOpacity
+                          style={[styles.quickDetectBtn, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            onSimulateDetection(camera.id, vehicle?.plateNumber || 'WB12AB1234');
+                          }}
+                          hitSlop={4}
+                        >
+                          <Ionicons name="play" size={10} color={colors.accent} style={{ marginRight: 3 }} />
+                          <Text style={[styles.quickDetectText, { color: colors.accent }]}>Detect</Text>
+                        </TouchableOpacity>
+                      )}
+
                       {onDeleteCamera && (
                         <TouchableOpacity
                           style={styles.deleteCamBtn}
@@ -412,6 +549,56 @@ export const DockedSidebar: React.FC<Props> = ({
           <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
             {vehicle ? (
               <View style={styles.trackingContainer}>
+                {/* MVP Trajectory Advance Strip */}
+                <View style={[styles.mvpSimulatorBox, { backgroundColor: colors.surfaceLight, borderColor: colors.accent, marginBottom: 12 }]}>
+                  <View style={styles.mvpHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="git-network-outline" size={14} color={colors.accent} />
+                      <Text style={[styles.mvpTitle, { color: colors.text }]}>ADVANCE ROUTE TO NEXT CAMERA</Text>
+                    </View>
+                    <TouchableOpacity onPress={onClearVehicle} style={styles.mvpResetBtn} hitSlop={6}>
+                      <Ionicons name="trash-outline" size={12} color={colors.accentRed} style={{ marginRight: 3 }} />
+                      <Text style={[styles.mvpResetText, { color: colors.accentRed }]}>Reset</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mvpCamScroll}>
+                    {cameras.map((cam, idx) => {
+                      const isVisited = trajectory?.detections.some((d) => d.cameraId === cam.id);
+                      const isCurrent = vehicle?.cameraId === cam.id;
+                      return (
+                        <TouchableOpacity
+                          key={cam.id}
+                          style={[
+                            styles.mvpCamChip,
+                            {
+                              backgroundColor: isCurrent ? colors.accent : isVisited ? colors.surface : colors.surfaceLight,
+                              borderColor: isCurrent ? colors.accent : isVisited ? colors.accentGreen : colors.border,
+                            },
+                          ]}
+                          onPress={() => onSimulateDetection?.(cam.id, vehicle?.plateNumber || 'WB12AB1234')}
+                        >
+                          <Text
+                            style={[
+                              styles.mvpCamChipText,
+                              { color: isCurrent ? '#ffffff' : isVisited ? colors.accentGreen : colors.text },
+                            ]}
+                          >
+                            {idx + 1}. {cam.name.split(' ')[0]}
+                          </Text>
+                          {isVisited && (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={12}
+                              color={isCurrent ? '#ffffff' : colors.accentGreen}
+                              style={{ marginLeft: 3 }}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
                 {/* Vehicle Header Card */}
                 <View style={[styles.vehicleHeaderCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
                   <View style={styles.vehicleCardTop}>
@@ -1316,6 +1503,72 @@ const styles = StyleSheet.create({
   addFirstCamBtnText: {
     color: '#ffffff',
     fontSize: 12,
+    fontWeight: '700',
+  },
+  mvpSimulatorBox: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  mvpHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  mvpTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  mvpResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#ef444420',
+  },
+  mvpResetText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  mvpSub: {
+    fontSize: 10,
+    marginBottom: 8,
+    lineHeight: 14,
+  },
+  mvpCamScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: 2,
+  },
+  mvpCamChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  mvpCamChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quickDetectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 4,
+  },
+  quickDetectText: {
+    fontSize: 10,
     fontWeight: '700',
   },
 });

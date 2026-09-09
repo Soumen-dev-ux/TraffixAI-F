@@ -9,9 +9,10 @@ type Props = {
   camera: Camera | null;
   visible: boolean;
   onClose: () => void;
+  onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
 };
 
-export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
+export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onSimulateDetection }) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
@@ -31,13 +32,17 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
     if (!camera) return;
     setIsDetecting(true);
     try {
-      await CameraApi.dispatchDetection({
-        cameraId: camera.id,
-        plateNumber: 'WB02AB1234',
-        vehicleType: 'car',
-        color: 'White',
-      });
-      setDetectedNotice(`Vehicle WB02AB1234 detected at ${camera.name}! Route updated.`);
+      if (onSimulateDetection) {
+        onSimulateDetection(camera.id, 'WB12AB1234');
+      } else {
+        await CameraApi.dispatchDetection({
+          cameraId: camera.id,
+          plateNumber: 'WB12AB1234',
+          vehicleType: 'car',
+          color: 'White',
+        });
+      }
+      setDetectedNotice(`Vehicle WB12AB1234 detected at ${camera.name}! Route updated.`);
       setTimeout(() => setDetectedNotice(null), 4000);
     } catch (err) {
       console.error('Failed to dispatch detection:', err);
@@ -186,7 +191,7 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose }) => {
           >
             <Ionicons name="scan-circle-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={styles.startFeedBtnText}>
-              {isDetecting ? 'Running AI Detection...' : 'Start Feed & Detect Vehicle (WB02AB1234)'}
+              {isDetecting ? 'Running AI Detection...' : 'Start Feed & Detect Vehicle (WB12AB1234)'}
             </Text>
           </TouchableOpacity>
         )}
