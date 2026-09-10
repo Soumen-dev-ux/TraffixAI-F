@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import CityMap from "../components/CityMap";
 import { DockedSidebar } from "../components/DockedSidebar";
 import { MapControls } from "../components/MapControls";
-import { CameraPopup } from "../components/CameraPopup";
+import { CameraPopup, DetectedVehicleItem } from "../components/CameraPopup";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProfileModal } from "../components/ProfileModal";
 import { AddCameraModal } from "../components/AddCameraModal";
@@ -61,7 +61,7 @@ export default function DashboardScreen() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showAddCamera, setShowAddCamera] = useState(false);
-  const [liveDetections, setLiveDetections] = useState<{ id: string; plateNumber: string; cameraName: string; detectedAt: string; vehicleType?: string }[]>([]);
+  const [liveDetections, setLiveDetections] = useState<DetectedVehicleItem[]>([]);
   const [reidAlert, setReidAlert] = useState<{ plate: string; fromCam: string; toCam: string; count: number } | null>(null);
 
   // Realtime subscription (WebSocket with auto-fallback)
@@ -170,15 +170,25 @@ export default function DashboardScreen() {
           });
 
           // 3. Add to recent live detections list
+          const nowMs = Date.now();
           setLiveDetections((prev) => [
             {
-              id: event.id || String(Date.now()),
+              id: event.id || String(nowMs),
               plateNumber: plate,
+              cameraId: camId,
               cameraName: camName,
               detectedAt,
               vehicleType: vType,
+              inFrame: true,
+              timestampMs: nowMs,
             },
-            ...prev.filter((p) => p.plateNumber !== plate).slice(0, 19),
+            ...prev
+              .filter((p) => !(p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName)))
+              .map((p) => ({
+                ...p,
+                inFrame: nowMs - (p.timestampMs || 0) < 25000,
+              }))
+              .slice(0, 49),
           ]);
 
           // 4. Check for Multi-Camera Re-ID Match
@@ -516,15 +526,25 @@ export default function DashboardScreen() {
     );
 
     // 4. Update live detections feed
+    const nowMs = Date.now();
     setLiveDetections((prev) => [
       {
-        id: `LIVE_${Date.now()}`,
+        id: `LIVE_${nowMs}`,
         plateNumber: cleanPlate,
+        cameraId: cam.id,
         cameraName: cam.name,
         detectedAt: detectedTime,
         vehicleType: 'car',
+        inFrame: true,
+        timestampMs: nowMs,
       },
-      ...prev.filter((p) => !(p.plateNumber === cleanPlate && p.cameraName === cam.name)).slice(0, 19),
+      ...prev
+        .filter((p) => !(p.plateNumber === cleanPlate && p.cameraName === cam.name))
+        .map((p) => ({
+          ...p,
+          inFrame: nowMs - (p.timestampMs || 0) < 25000,
+        }))
+        .slice(0, 49),
     ]);
 
     // 5. Automatically switch active tab to 'tracking'
@@ -545,6 +565,96 @@ export default function DashboardScreen() {
     } catch (err) {
       console.error('Trigger camera detection failed:', err);
     }
+  };
+
+  const handleSelectVehicleFromCamera = (plateNumber: string, vehicleType?: string) => {
+    const cleanPlate = plateNumber.trim().toUpperCase();
+    setSearchText(cleanPlate);
+
+    // 1. Gather all detections for this vehicle across cameras
+    const plateDetections = liveDetections.filter(
+      (d) => d.plateNumber.replace(/[\s-]/g, '').toUpperCase() === cleanPlate.replace(/[\s-]/g, '')
+    );
+
+    // 2. Find chronological waypoints
+    const sortedDets = [...plateDetections].sort((a, b) => {
+      const tA = a.timestampMs || new Date(a.detectedAt).getTime();
+      const tB = b.timestampMs || new Date(b.detectedAt).getTime();
+      return tA - tB;
+    });
+
+    const waypoints = sortedDets.map((d, index) => {
+      const cam = cameras.find((c) => c.id === d.cameraId || c.name === d.cameraName);
+      return {
+        id: d.id || `DET_${index + 1}`,
+        cameraId: d.cameraId || cam?.id || 'CAM_001',
+        cameraName: d.cameraName || cam?.name || 'Traffic Camera',
+        latitude: cam ? cam.latitude : 22.5535,
+        longitude: cam ? cam.longitude : 88.3525,
+        detectedAt: d.detectedAt,
+      };
+    });
+
+    // 3. Fallback to currently selected camera if no waypoints recorded yet
+    const latestWaypoint = waypoints.length > 0 ? waypoints[waypoints.length - 1] : null;
+    const targetCamera = latestWaypoint
+      ? cameras.find((c) => c.id === latestWaypoint.cameraId)
+      : selectedCamera || cameras[0];
+
+    const currentLat = targetCamera ? targetCamera.latitude : 22.5535;
+    const currentLng = targetCamera ? targetCamera.longitude : 88.3525;
+    const currentCamId = targetCamera ? targetCamera.id : 'CAM_001';
+    const currentCamName = targetCamera ? targetCamera.name : 'Traffic Camera';
+
+    // 4. Set vehicle state
+    const currentVehicle: Vehicle = {
+      id: `VH_${cleanPlate}`,
+      plateNumber: cleanPlate,
+      vehicleType: (vehicleType || 'car') as any,
+      color: 'White',
+      latitude: currentLat,
+      longitude: currentLng,
+      cameraId: currentCamId,
+      cameraName: currentCamName,
+      detectedAt: latestWaypoint ? latestWaypoint.detectedAt : new Date().toISOString(),
+      speed: 42,
+    };
+    setVehicle(currentVehicle);
+
+    // 5. Set trajectory state (if 1 camera -> icon pin; if multiple cameras -> route polyline)
+    if (waypoints.length > 0) {
+      setTrajectory({
+        vehicleId: currentVehicle.id,
+        plateNumber: cleanPlate,
+        vehicleType: currentVehicle.vehicleType,
+        detections: waypoints,
+      });
+    } else {
+      setTrajectory({
+        vehicleId: currentVehicle.id,
+        plateNumber: cleanPlate,
+        vehicleType: currentVehicle.vehicleType,
+        detections: [
+          {
+            id: `DET_${Date.now()}`,
+            cameraId: currentCamId,
+            cameraName: currentCamName,
+            latitude: currentLat,
+            longitude: currentLng,
+            detectedAt: currentVehicle.detectedAt,
+          },
+        ],
+      });
+    }
+
+    // 6. Focus map & activate Tracking tab
+    setFocusLocation({ latitude: currentLat, longitude: currentLng });
+    setActiveTab('tracking');
+    setShowSidebar(true);
+    setSelectedCamera(null);
+
+    // Also attempt backend search in case more historical data exists in DB
+    executeVehicleSearch(cleanPlate);
   };
 
   return (
@@ -665,6 +775,8 @@ export default function DashboardScreen() {
           onClose={() => setSelectedCamera(null)}
           onTriggerCameraDetection={handleTriggerCameraDetection}
           onEditCamera={(cam) => setEditingCamera(cam)}
+          sessionDetections={liveDetections}
+          onSelectVehicle={handleSelectVehicleFromCamera}
         />
       </View>
 

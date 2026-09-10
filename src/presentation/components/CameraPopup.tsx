@@ -5,19 +5,93 @@ import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
 import { CameraApi } from '../../data/api/CameraApi';
 
+export type DetectedVehicleItem = {
+  id: string;
+  plateNumber: string;
+  cameraName: string;
+  cameraId?: string;
+  detectedAt: string;
+  vehicleType?: string;
+  inFrame?: boolean;
+  timestampMs?: number;
+};
+
 type Props = {
   camera: Camera | null;
   visible: boolean;
   onClose: () => void;
   onTriggerCameraDetection?: (cameraId: string) => Promise<void> | void;
   onEditCamera?: (camera: Camera) => void;
+  sessionDetections?: DetectedVehicleItem[];
+  onSelectVehicle?: (plateNumber: string, vehicleType?: string) => void;
 };
 
-export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onTriggerCameraDetection, onEditCamera }) => {
+const FILTER_CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'car', label: 'Car' },
+  { id: 'motorcycle', label: 'Motorcycle' },
+  { id: 'truck', label: 'Truck' },
+  { id: 'bus', label: 'Bus' },
+  { id: 'van', label: 'Van' },
+  { id: 'taxi', label: 'Taxi' },
+  { id: 'other', label: 'Other' },
+];
+
+export const CameraPopup: React.FC<Props> = ({
+  camera,
+  visible,
+  onClose,
+  onTriggerCameraDetection,
+  onEditCamera,
+  sessionDetections = [],
+  onSelectVehicle,
+}) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
   const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
+
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '';
+    try {
+      const d = new Date(timeStr);
+      if (isNaN(d.getTime())) return timeStr;
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch {
+      return timeStr;
+    }
+  };
+
+  const cameraDetections = React.useMemo(() => {
+    if (!camera || !sessionDetections) return [];
+    return sessionDetections.filter(
+      (d) => !d.cameraId || d.cameraId === camera.id || d.cameraName === camera.name
+    );
+  }, [camera, sessionDetections]);
+
+  const filteredDetections = React.useMemo(() => {
+    if (selectedCategory === 'all') return cameraDetections;
+    return cameraDetections.filter((d) => {
+      const type = (d.vehicleType || 'car').toLowerCase();
+      if (selectedCategory === 'other') {
+        return ['other', 'unknown'].includes(type) || !['car', 'motorcycle', 'truck', 'bus', 'van', 'taxi'].includes(type);
+      }
+      return type === selectedCategory;
+    });
+  }, [cameraDetections, selectedCategory]);
+
+  const isVehicleInFrame = (d: DetectedVehicleItem) => {
+    if (typeof d.inFrame === 'boolean') return d.inFrame;
+    if (d.timestampMs) {
+      return Date.now() - d.timestampMs < 20000;
+    }
+    if (d.detectedAt) {
+      const age = Date.now() - new Date(d.detectedAt).getTime();
+      return age < 20000;
+    }
+    return true;
+  };
 
   React.useEffect(() => {
     if (!visible || !camera) return;
@@ -136,7 +210,7 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onTrigg
           {isOnline ? (
             Platform.OS === 'web' ? (
               React.createElement('video', {
-                key: camera.id,
+                key: `${camera.id}_${camera.streamUrl || camera.stream_url || ''}`,
                 src: camera.streamUrl || camera.stream_url || (camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4'),
                 autoPlay: true,
                 loop: true,
@@ -212,27 +286,135 @@ export const CameraPopup: React.FC<Props> = ({ camera, visible, onClose, onTrigg
           </Text>
         </View>
 
-        {/* Detected Vehicles Grid */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DETECTED VEHICLES</Text>
-        <View style={styles.vehiclesGrid}>
-          {Object.entries(camera.detectedVehicles).map(([type, count]) => {
-            if (count === 0) return null;
-            const icon = vehicleIcons[type as keyof typeof vehicleIcons] || vehicleIcons.car;
+        {/* Live Detected Vehicles Section */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LIVE DETECTED VEHICLES</Text>
+          <View style={[styles.countBadge, { backgroundColor: colors.surfaceLight }]}>
+            <Text style={[styles.countBadgeText, { color: colors.accent }]}>
+              {cameraDetections.length} total
+            </Text>
+          </View>
+        </View>
 
+        {/* Category Filter Chips Bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {FILTER_CATEGORIES.map((cat) => {
+            const isActive = selectedCategory === cat.id;
             return (
-              <View
-                key={type}
-                style={[styles.vehicleCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? colors.accent : colors.surfaceLight,
+                    borderColor: isActive ? colors.accent : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedCategory(cat.id)}
+                activeOpacity={0.7}
               >
-                {icon}
-                <View style={styles.vehicleCardText}>
-                  <Text style={[styles.vehicleCount, { color: colors.text }]}>{count}</Text>
-                  <Text style={[styles.vehicleType, { color: colors.textMuted }]}>{type}</Text>
-                </View>
-              </View>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: isActive ? '#ffffff' : colors.textSecondary },
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
+
+        {/* Detected Vehicles List */}
+        {filteredDetections.length === 0 ? (
+          <View style={[styles.emptyDetectionsCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+            <Ionicons name="scan-outline" size={24} color={colors.textMuted} />
+            <Text style={[styles.emptyDetectionsTitle, { color: colors.text }]}>
+              {cameraDetections.length === 0
+                ? 'No Vehicles Detected Yet'
+                : `No ${selectedCategory.toUpperCase()} detected`}
+            </Text>
+            <Text style={[styles.emptyDetectionsSub, { color: colors.textMuted }]}>
+              {cameraDetections.length === 0
+                ? 'Tap "▶ Start AI Detection" above to scan video and track plates.'
+                : 'Select "All" to view all vehicles processed at this camera.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.detectedList}>
+            {filteredDetections.map((item) => {
+              const inFrame = isVehicleInFrame(item);
+              const icon = vehicleIcons[item.vehicleType as keyof typeof vehicleIcons] || vehicleIcons.car;
+
+              return (
+                <TouchableOpacity
+                  key={item.id || item.plateNumber}
+                  style={[
+                    styles.detectedRow,
+                    {
+                      backgroundColor: colors.surfaceLight,
+                      borderColor: inFrame ? colors.accentGreen + '50' : colors.border,
+                    },
+                  ]}
+                  onPress={() => onSelectVehicle?.(item.plateNumber, item.vehicleType)}
+                  activeOpacity={0.7}
+                >
+                  {/* Left: Vehicle Icon Box */}
+                  <View style={[styles.vehicleIconBadge, { backgroundColor: colors.surface }]}>
+                    {icon}
+                  </View>
+
+                  {/* Center: Plate + Type + Time */}
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.platePill, { backgroundColor: '#020617', borderColor: '#38bdf8' }]}>
+                      <Text style={[styles.plateText, { color: '#38bdf8' }]}>
+                        {item.plateNumber}
+                      </Text>
+                    </View>
+                    <Text style={[styles.vehicleMetaText, { color: colors.textMuted }]}>
+                      {(item.vehicleType || 'car').toUpperCase()} • {formatTime(item.detectedAt)}
+                    </Text>
+                  </View>
+
+                  {/* Right: In-Frame Status Badge */}
+                  <View
+                    style={[
+                      styles.frameBadge,
+                      {
+                        backgroundColor: inFrame ? colors.accentGreen + '20' : colors.surface,
+                        borderColor: inFrame ? colors.accentGreen : colors.border,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.frameDot,
+                        { backgroundColor: inFrame ? colors.accentGreen : colors.textMuted },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.frameText,
+                        { color: inFrame ? colors.accentGreen : colors.textMuted },
+                      ]}
+                    >
+                      {inFrame ? 'IN FRAME' : 'EXITED'}
+                    </Text>
+                  </View>
+
+                  {/* Arrow Indicator */}
+                  <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Coordinates Location */}
         <View style={[styles.locationContainer, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
@@ -449,38 +631,119 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
-    marginBottom: 8,
   },
-  vehiclesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  vehicleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  countBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    minWidth: 80,
-    gap: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
-  vehicleCardText: {
-    justifyContent: 'center',
-  },
-  vehicleCount: {
-    fontSize: 12,
+  countBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
   },
-  vehicleType: {
+  filterScroll: {
+    marginBottom: 10,
+  },
+  filterScrollContent: {
+    gap: 6,
+    paddingRight: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  detectedList: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  detectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+  },
+  vehicleIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  platePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    marginBottom: 3,
+  },
+  plateText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  vehicleMetaText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  frameBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  frameDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  frameText: {
     fontSize: 9,
-    textTransform: 'capitalize',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  emptyDetectionsCard: {
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyDetectionsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  emptyDetectionsSub: {
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   locationContainer: {
     flexDirection: 'row',

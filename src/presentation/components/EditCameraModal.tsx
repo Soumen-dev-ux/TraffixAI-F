@@ -32,9 +32,11 @@ type Props = {
 };
 
 const VIDEO_PRESETS = [
-  { label: 'Feed 1: 215258_medium.mp4 (Multi-Camera Re-ID Demo)', path: '/videos/215258_medium.mp4' },
-  { label: 'Feed 2: sample_traffic.mp4 (Kolkata Urban)', path: '/videos/sample_traffic.mp4' },
+  { label: 'Feed 1: gettyimages-1191315794-640_adpp.mp4 (New Camera Footage 1)', path: '/videos/gettyimages-1191315794-640_adpp.mp4' },
+  { label: 'Feed 2: gettyimages-465302231-640_adpp.mp4 (New Camera Footage 2)', path: '/videos/gettyimages-465302231-640_adpp.mp4' },
   { label: 'Feed 3: junction_traffic.mp4 (High-Density Junction)', path: '/videos/junction_traffic.mp4' },
+  { label: 'Feed 4: sample_traffic.mp4 (Kolkata Urban)', path: '/videos/sample_traffic.mp4' },
+  { label: 'Feed 5: 215258_medium.mp4 (Multi-Camera Re-ID Highway)', path: '/videos/215258_medium.mp4' },
 ];
 
 const DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound', '360° Pan'];

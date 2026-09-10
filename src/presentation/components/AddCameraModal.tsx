@@ -38,8 +38,11 @@ const KOLKATA_PRESETS = [
 const DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound', '360° Pan'];
 
 const VIDEO_PRESETS = [
-  { label: 'Feed A: Sample Traffic (Salt Lake / Park St)', path: '/videos/sample_traffic.mp4' },
-  { label: 'Feed B: Junction Highway (Howrah / Esplanade)', path: '/videos/junction_traffic.mp4' },
+  { label: 'Feed 1: gettyimages-1191315794-640_adpp.mp4 (New Camera Footage 1)', path: '/videos/gettyimages-1191315794-640_adpp.mp4' },
+  { label: 'Feed 2: gettyimages-465302231-640_adpp.mp4 (New Camera Footage 2)', path: '/videos/gettyimages-465302231-640_adpp.mp4' },
+  { label: 'Feed 3: junction_traffic.mp4 (High-Density Junction)', path: '/videos/junction_traffic.mp4' },
+  { label: 'Feed 4: sample_traffic.mp4 (Kolkata Urban)', path: '/videos/sample_traffic.mp4' },
+  { label: 'Feed 5: 215258_medium.mp4 (Multi-Camera Re-ID Highway)', path: '/videos/215258_medium.mp4' },
 ];
 
 export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera }) => {
@@ -49,7 +52,9 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
   const [latitude, setLatitude] = useState('22.5769');
   const [longitude, setLongitude] = useState('88.4331');
   const [direction, setDirection] = useState('Eastbound');
-  const [streamUrl, setStreamUrl] = useState('/videos/sample_traffic.mp4');
+  const [streamUrl, setStreamUrl] = useState('/videos/gettyimages-1191315794-640_adpp.mp4');
+  const [isCustomUrl, setIsCustomUrl] = useState(false);
+  const [customStreamUrl, setCustomStreamUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +64,8 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
     setLongitude(preset.lng.toString());
     setDirection(preset.dir);
     setStreamUrl(preset.video);
+    setIsCustomUrl(false);
+    setCustomStreamUrl('');
     setError('');
   };
 
@@ -79,6 +86,12 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
       return;
     }
 
+    const finalStreamUrl = isCustomUrl ? customStreamUrl.trim() : streamUrl;
+    if (!finalStreamUrl) {
+      setError('Please select or specify a video source.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -87,7 +100,7 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
         latitude: latNum,
         longitude: lngNum,
         direction,
-        stream_url: streamUrl,
+        stream_url: finalStreamUrl,
       });
       onClose();
     } catch (e: any) {
@@ -227,7 +240,7 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
             {/* Video Footage Selection */}
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>ASSIGNED VIDEO FOOTAGE</Text>
             {VIDEO_PRESETS.map((vp) => {
-              const isSelected = streamUrl === vp.path;
+              const isSelected = !isCustomUrl && streamUrl === vp.path;
               return (
                 <TouchableOpacity
                   key={vp.path}
@@ -238,7 +251,10 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
                       borderColor: isSelected ? colors.accent : colors.border,
                     },
                   ]}
-                  onPress={() => setStreamUrl(vp.path)}
+                  onPress={() => {
+                    setIsCustomUrl(false);
+                    setStreamUrl(vp.path);
+                  }}
                 >
                   <Ionicons
                     name={isSelected ? 'radio-button-on' : 'radio-button-off'}
@@ -250,6 +266,49 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
                 </TouchableOpacity>
               );
             })}
+
+            {/* Custom Stream URL / Video Path Option */}
+            <TouchableOpacity
+              style={[
+                styles.videoOption,
+                {
+                  backgroundColor: isCustomUrl ? colors.accent + '20' : colors.surfaceLight,
+                  borderColor: isCustomUrl ? colors.accent : colors.border,
+                },
+              ]}
+              onPress={() => {
+                setIsCustomUrl(true);
+              }}
+            >
+              <Ionicons
+                name={isCustomUrl ? 'radio-button-on' : 'radio-button-off'}
+                size={16}
+                color={isCustomUrl ? colors.accent : colors.textMuted}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={[styles.videoOptionText, { color: colors.text }]}>
+                Custom RTSP / HTTP Stream / Video File Path
+              </Text>
+            </TouchableOpacity>
+
+            {isCustomUrl && (
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surfaceLight,
+                    borderColor: colors.accent,
+                    color: colors.text,
+                    marginTop: 6,
+                  },
+                ]}
+                value={customStreamUrl}
+                onChangeText={setCustomStreamUrl}
+                placeholder="e.g. rtsp://192.168.1.100:554/stream or /videos/my_video.mp4"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+              />
+            )}
 
             {error ? (
               <View style={[styles.errorBanner, { backgroundColor: colors.accentRed + '20' }]}>
