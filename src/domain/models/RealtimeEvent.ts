@@ -1,8 +1,10 @@
 export type RealtimeEventType =
   | "camera_status"
   | "vehicle_detection"
+  | "vehicle_exited"
   | "traffic_update"
   | "camera_added"
+  | "camera_updated"
   | "camera_deleted"
   | "cameras_reset"
   | "security_alert";

@@ -100,20 +100,21 @@ export const CameraPopup: React.FC<Props> = ({
       (d) =>
         (d.cameraId === camera.id || d.cameraName === camera.name) &&
         d.boundingBox &&
-        now - (d.timestampMs || 0) < 6500
+        d.inFrame !== false &&
+        now - (d.timestampMs || 0) < 6000
     );
   }, [sessionDetections, camera]);
 
   const isVehicleInFrame = (d: DetectedVehicleItem) => {
     if (typeof d.inFrame === 'boolean') return d.inFrame;
     if (d.timestampMs) {
-      return Date.now() - d.timestampMs < 20000;
+      return Date.now() - d.timestampMs < 12000;
     }
     if (d.detectedAt) {
       const age = Date.now() - new Date(d.detectedAt).getTime();
-      return age < 20000;
+      return age < 12000;
     }
-    return true;
+    return false;
   };
 
   React.useEffect(() => {
@@ -457,28 +458,49 @@ export const CameraPopup: React.FC<Props> = ({
                     {icon}
                   </View>
 
-                  {/* Center: Plate + Type + Time */}
-                  <View style={{ flex: 1 }}>
+                  {/* Center: ID + Plate + Type + Time */}
+                  <View style={{ flex: 1, gap: 4 }}>
+                    {/* Top Row: AI Track ID + Plate Pill */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {/* AI Unique Track ID */}
+                      <View style={[styles.trackIdPill, { backgroundColor: '#0f172a', borderColor: '#334155' }]}>
+                        <Text style={[styles.trackIdText, { color: '#94a3b8' }]}>
+                          {`ID #${item.localTrackId ? item.localTrackId.split('_').pop() : (item.id || '').slice(-3)}`}
+                        </Text>
+                      </View>
+
+                      {/* License Plate Number or Dash */}
+                      {(() => {
+                        const hasOcrPlate = item.plateNumber && !item.plateNumber.startsWith('TRACK_') && !item.plateNumber.startsWith('CAM_') && !item.plateNumber.startsWith('NO_PLATE') && !item.plateNumber.startsWith('UNREADABLE');
+                        const borderColor = hasOcrPlate ? '#38bdf8' : '#334155';
+                        const textColor = hasOcrPlate ? '#38bdf8' : '#64748b';
+                        const plateDisplay = hasOcrPlate ? item.plateNumber : '—';
+
+                        return (
+                          <View style={[styles.platePill, { backgroundColor: '#020617', borderColor }]}>
+                            <Text style={[styles.plateText, { color: textColor }]}>
+                              {`PLATE: ${plateDisplay}`}
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+
+                    {/* Bottom Meta Row: Vehicle Type + Confidence + Time */}
                     {(() => {
-                      const hasOcrPlate = item.plateNumber && !item.plateNumber.startsWith('TRACK_') && !item.plateNumber.startsWith('CAM_') && !item.plateNumber.startsWith('NO_PLATE');
-                      const borderColor = hasOcrPlate ? '#38bdf8' : '#10b981';
-                      const displayTitle = hasOcrPlate
-                        ? item.plateNumber
-                        : `${(item.vehicleType || 'VEHICLE').toUpperCase()} #${item.localTrackId ? item.localTrackId.split('_').pop() : (item.id || '').slice(-4)}`;
+                      const vType = item.vehicleType ? item.vehicleType.trim() : '';
+                      const isIdentified = vType && vType !== 'unknown' && vType !== 'other';
+                      const typeLabel = isIdentified ? vType.toUpperCase() : 'UNIDENTIFIED';
+                      const confText = item.confidence ? ` (${Math.round(item.confidence * 100)}% conf)` : '';
 
                       return (
-                        <View style={[styles.platePill, { backgroundColor: '#020617', borderColor }]}>
-                          <Text style={[styles.plateText, { color: borderColor }]}>
-                            {displayTitle}
-                          </Text>
-                        </View>
+                        <Text style={[styles.vehicleMetaText, { color: colors.textMuted }]}>
+                          <Text style={{ color: colors.text, fontWeight: '600' }}>{typeLabel}</Text>
+                          {confText}
+                          {` • ${formatTime(item.detectedAt)}`}
+                        </Text>
                       );
                     })()}
-                    <Text style={[styles.vehicleMetaText, { color: colors.textMuted }]}>
-                      {(item.vehicleType || 'car').toUpperCase()}
-                      {item.confidence ? ` • ${Math.round(item.confidence * 100)}% conf` : ''}
-                      {` • ${formatTime(item.detectedAt)}`}
-                    </Text>
                   </View>
 
                   {/* Right: In-Frame Status Badge */}
@@ -568,13 +590,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 58,
     right: 16,
-    width: 350,
-    maxHeight: '80%',
+    width: 450,
+    maxHeight: '85%',
     zIndex: 40,
   },
   cardMobile: {
     width: '100%',
-    maxHeight: '80%',
+    maxHeight: '85%',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
@@ -603,7 +625,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollBody: {
-    maxHeight: 480,
+    maxHeight: 520,
   },
   statusRow: {
     flexDirection: 'row',
@@ -632,7 +654,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   feedContainer: {
-    height: 160,
+    height: 240,
+    aspectRatio: 16 / 9,
+    width: '100%',
     borderRadius: 10,
     borderWidth: 1,
     justifyContent: 'center',
@@ -787,13 +811,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  trackIdPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  trackIdText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.5,
+  },
   platePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
     alignSelf: 'flex-start',
-    marginBottom: 3,
   },
   plateText: {
     fontSize: 11,

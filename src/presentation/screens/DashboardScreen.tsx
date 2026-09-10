@@ -136,6 +136,23 @@ export default function DashboardScreen() {
         );
       }
 
+      if (event.type === 'vehicle_exited' && event.data) {
+        const d = event.data as any;
+        const plate = d.plateNumber || d.localTrackId || d.vehicleId;
+        const camId = d.cameraId;
+        setLiveDetections((prev) =>
+          prev.map((item) => {
+            if (
+              (item.plateNumber === plate || item.localTrackId === d.localTrackId) &&
+              (!camId || item.cameraId === camId)
+            ) {
+              return { ...item, inFrame: false };
+            }
+            return item;
+          })
+        );
+      }
+
       if (event.type === 'vehicle_detection' && event.data) {
         const d = event.data as any;
         const plate = d.plateNumber || d.plate_number || d.local_track_id || d.vehicleId;
