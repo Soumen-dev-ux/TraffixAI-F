@@ -5,6 +5,15 @@ import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
 import { CameraApi } from '../../data/api/CameraApi';
 
+export type BoundingBoxData = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  frame_width?: number;
+  frame_height?: number;
+};
+
 export type DetectedVehicleItem = {
   id: string;
   plateNumber: string;
@@ -12,6 +21,9 @@ export type DetectedVehicleItem = {
   cameraId?: string;
   detectedAt: string;
   vehicleType?: string;
+  confidence?: number;
+  boundingBox?: BoundingBoxData | null;
+  localTrackId?: string;
   inFrame?: boolean;
   timestampMs?: number;
 };
@@ -80,6 +92,17 @@ export const CameraPopup: React.FC<Props> = ({
       return type === selectedCategory;
     });
   }, [cameraDetections, selectedCategory]);
+
+  const activeBoundingBoxes = React.useMemo(() => {
+    if (!camera || !sessionDetections) return [];
+    const now = Date.now();
+    return sessionDetections.filter(
+      (d) =>
+        (d.cameraId === camera.id || d.cameraName === camera.name) &&
+        d.boundingBox &&
+        now - (d.timestampMs || 0) < 6500
+    );
+  }, [sessionDetections, camera]);
 
   const isVehicleInFrame = (d: DetectedVehicleItem) => {
     if (typeof d.inFrame === 'boolean') return d.inFrame;
@@ -236,6 +259,70 @@ export const CameraPopup: React.FC<Props> = ({
             </View>
           )}
 
+          {/* Real-time AI Bounding Box Overlays */}
+          {isOnline && activeBoundingBoxes.map((item) => {
+            const b = item.boundingBox!;
+            const fw = b.frame_width || 768;
+            const fh = b.frame_height || 432;
+            const leftPct = Math.max(0, Math.min(100, (b.x1 / fw) * 100));
+            const topPct = Math.max(0, Math.min(100, (b.y1 / fh) * 100));
+            const widthPct = Math.max(4, Math.min(100 - leftPct, ((b.x2 - b.x1) / fw) * 100));
+            const heightPct = Math.max(4, Math.min(100 - topPct, ((b.y2 - b.y1) / fh) * 100));
+
+            const hasOcrPlate = item.plateNumber && !item.plateNumber.startsWith('TRACK_') && !item.plateNumber.startsWith('CAM_') && !item.plateNumber.startsWith('NO_PLATE');
+            const boxColor = hasOcrPlate ? '#38bdf8' : '#10b981';
+
+            return (
+              <View
+                key={`bbox_${item.id}_${item.plateNumber}`}
+                style={{
+                  position: 'absolute',
+                  left: `${leftPct}%`,
+                  top: `${topPct}%`,
+                  width: `${widthPct}%`,
+                  height: `${heightPct}%`,
+                  borderWidth: 2,
+                  borderColor: boxColor,
+                  backgroundColor: hasOcrPlate ? 'rgba(56, 189, 248, 0.18)' : 'rgba(16, 185, 129, 0.18)',
+                  borderRadius: 4,
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}
+              >
+                {/* Floating Tag */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -22,
+                    left: -2,
+                    backgroundColor: boxColor,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 3,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 2,
+                  }}
+                >
+                  <Text style={{ color: '#000000', fontSize: 10, fontWeight: '800' }}>
+                    {hasOcrPlate
+                      ? item.plateNumber
+                      : `${(item.vehicleType || 'VEHICLE').toUpperCase()} #${item.localTrackId ? item.localTrackId.split('_').pop() : (item.id || '').slice(-3)}`}
+                  </Text>
+                  {item.confidence ? (
+                    <Text style={{ color: '#002511', fontSize: 9, fontWeight: '700' }}>
+                      {Math.round(item.confidence * 100)}%
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+
           {isOnline && (
             <>
               {/* Overlay Top Left: Camera ID & FPS */}
@@ -372,13 +459,25 @@ export const CameraPopup: React.FC<Props> = ({
 
                   {/* Center: Plate + Type + Time */}
                   <View style={{ flex: 1 }}>
-                    <View style={[styles.platePill, { backgroundColor: '#020617', borderColor: '#38bdf8' }]}>
-                      <Text style={[styles.plateText, { color: '#38bdf8' }]}>
-                        {item.plateNumber}
-                      </Text>
-                    </View>
+                    {(() => {
+                      const hasOcrPlate = item.plateNumber && !item.plateNumber.startsWith('TRACK_') && !item.plateNumber.startsWith('CAM_') && !item.plateNumber.startsWith('NO_PLATE');
+                      const borderColor = hasOcrPlate ? '#38bdf8' : '#10b981';
+                      const displayTitle = hasOcrPlate
+                        ? item.plateNumber
+                        : `${(item.vehicleType || 'VEHICLE').toUpperCase()} #${item.localTrackId ? item.localTrackId.split('_').pop() : (item.id || '').slice(-4)}`;
+
+                      return (
+                        <View style={[styles.platePill, { backgroundColor: '#020617', borderColor }]}>
+                          <Text style={[styles.plateText, { color: borderColor }]}>
+                            {displayTitle}
+                          </Text>
+                        </View>
+                      );
+                    })()}
                     <Text style={[styles.vehicleMetaText, { color: colors.textMuted }]}>
-                      {(item.vehicleType || 'car').toUpperCase()} • {formatTime(item.detectedAt)}
+                      {(item.vehicleType || 'car').toUpperCase()}
+                      {item.confidence ? ` • ${Math.round(item.confidence * 100)}% conf` : ''}
+                      {` • ${formatTime(item.detectedAt)}`}
                     </Text>
                   </View>
 
