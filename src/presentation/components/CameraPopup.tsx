@@ -250,7 +250,7 @@ export const CameraPopup: React.FC<Props> = ({
               isDetectionActive ? (
                 React.createElement('img', {
                   key: `ai_stream_${camera.id}_${streamSessionId}`,
-                  src: `http://localhost:8000/api/v1/cameras/${camera.id}/stream?t=${streamSessionId}`,
+                  src: `http://localhost:8002/api/v1/stream/${camera.id}?t=${streamSessionId}`,
                   alt: 'Live AI Video Feed',
                   style: {
                     width: '100%',
@@ -259,6 +259,13 @@ export const CameraPopup: React.FC<Props> = ({
                     borderRadius: 10,
                     display: 'block',
                   },
+                  onError: (e: any) => {
+                    const target = e?.target as HTMLImageElement;
+                    if (target && !target.dataset.retried) {
+                      target.dataset.retried = 'true';
+                      target.src = `http://localhost:8000/api/v1/cameras/${camera.id}/stream?t=${streamSessionId}`;
+                    }
+                  }
                 })
               ) : (
                 React.createElement('video', {
