@@ -271,4 +271,10 @@ export const CameraApi = {
       mode,
     });
   },
+
+  async stopCameraDetection(cameraId: string): Promise<any> {
+    return apiClient.post<any, any>('/api/v1/simulation/stop-camera', {
+      camera_id: cameraId,
+    });
+  },
 };

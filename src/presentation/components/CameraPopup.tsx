@@ -61,6 +61,7 @@ export const CameraPopup: React.FC<Props> = ({
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
+  const [isDetectionActive, setIsDetectionActive] = React.useState(true);
   const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
   const [aiStreamActive, setAiStreamActive] = React.useState(true);
@@ -95,18 +96,6 @@ export const CameraPopup: React.FC<Props> = ({
     });
   }, [cameraDetections, selectedCategory]);
 
-  const activeBoundingBoxes = React.useMemo(() => {
-    if (!camera || !sessionDetections) return [];
-    const now = Date.now();
-    return sessionDetections.filter(
-      (d) =>
-        (d.cameraId === camera.id || d.cameraName === camera.name) &&
-        d.boundingBox &&
-        d.inFrame !== false &&
-        now - (d.timestampMs || 0) < 6000
-    );
-  }, [sessionDetections, camera]);
-
   const isVehicleInFrame = (d: DetectedVehicleItem) => {
     if (typeof d.inFrame === 'boolean') return d.inFrame;
     if (d.timestampMs) {
@@ -129,19 +118,32 @@ export const CameraPopup: React.FC<Props> = ({
 
   if (!camera || !visible) return null;
 
-  const handleTriggerDetection = async () => {
+  const handleToggleDetection = async () => {
     if (!camera) return;
     setIsDetecting(true);
     try {
-      if (onTriggerCameraDetection) {
-        await onTriggerCameraDetection(camera.id);
+      if (isDetectionActive) {
+        // Stop Detection
+        await CameraApi.stopCameraDetection(camera.id);
+        setIsDetectionActive(false);
+        setAiStreamActive(false);
+        setDetectedNotice(`AI Detection stopped for ${camera.name}`);
+        setTimeout(() => setDetectedNotice(null), 3000);
       } else {
-        await CameraApi.triggerCameraDetection(camera.id, 'auto');
+        // Start Detection
+        if (onTriggerCameraDetection) {
+          await onTriggerCameraDetection(camera.id);
+        } else {
+          await CameraApi.triggerCameraDetection(camera.id, 'auto');
+        }
+        setIsDetectionActive(true);
+        setAiStreamActive(true);
+        setAiStreamError(false);
+        setDetectedNotice(`AI Detection active at ${camera.name}!`);
+        setTimeout(() => setDetectedNotice(null), 3000);
       }
-      setDetectedNotice(`AI Detection active at ${camera.name}! Scanning video...`);
-      setTimeout(() => setDetectedNotice(null), 4000);
     } catch (err) {
-      console.error('Failed to trigger AI detection:', err);
+      console.error('Failed to toggle AI detection:', err);
     } finally {
       setIsDetecting(false);
     }
@@ -235,7 +237,7 @@ export const CameraPopup: React.FC<Props> = ({
         <View style={[styles.feedContainer, { backgroundColor: '#000000', borderColor: colors.border }]}>
           {isOnline ? (
             Platform.OS === 'web' ? (
-              aiStreamActive && !aiStreamError ? (
+              isDetectionActive && aiStreamActive && !aiStreamError ? (
                 React.createElement('img', {
                   key: `ai_stream_${camera.id}`,
                   src: `http://localhost:8000/api/v1/cameras/${camera.id}/stream`,
@@ -281,70 +283,6 @@ export const CameraPopup: React.FC<Props> = ({
             </View>
           )}
 
-          {/* Real-time AI Bounding Box Overlays (Only when on raw video mode) */}
-          {isOnline && (!aiStreamActive || aiStreamError) && activeBoundingBoxes.map((item) => {
-            const b = item.boundingBox!;
-            const fw = b.frame_width || 768;
-            const fh = b.frame_height || 432;
-            const leftPct = Math.max(0, Math.min(100, (b.x1 / fw) * 100));
-            const topPct = Math.max(0, Math.min(100, (b.y1 / fh) * 100));
-            const widthPct = Math.max(4, Math.min(100 - leftPct, ((b.x2 - b.x1) / fw) * 100));
-            const heightPct = Math.max(4, Math.min(100 - topPct, ((b.y2 - b.y1) / fh) * 100));
-
-            const hasOcrPlate = item.plateNumber && !item.plateNumber.startsWith('TRACK_') && !item.plateNumber.startsWith('CAM_') && !item.plateNumber.startsWith('NO_PLATE');
-            const boxColor = hasOcrPlate ? '#38bdf8' : '#10b981';
-
-            return (
-              <View
-                key={`bbox_${item.id}_${item.plateNumber}`}
-                style={{
-                  position: 'absolute',
-                  left: `${leftPct}%`,
-                  top: `${topPct}%`,
-                  width: `${widthPct}%`,
-                  height: `${heightPct}%`,
-                  borderWidth: 2,
-                  borderColor: boxColor,
-                  backgroundColor: hasOcrPlate ? 'rgba(56, 189, 248, 0.18)' : 'rgba(16, 185, 129, 0.18)',
-                  borderRadius: 4,
-                  pointerEvents: 'none',
-                  zIndex: 10,
-                }}
-              >
-                {/* Floating Tag */}
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: -22,
-                    left: -2,
-                    backgroundColor: boxColor,
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 3,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.5,
-                    shadowRadius: 2,
-                  }}
-                >
-                  <Text style={{ color: '#000000', fontSize: 10, fontWeight: '800' }}>
-                    {hasOcrPlate
-                      ? item.plateNumber
-                      : `${(item.vehicleType || 'VEHICLE').toUpperCase()} #${item.localTrackId ? item.localTrackId.split('_').pop() : (item.id || '').slice(-3)}`}
-                  </Text>
-                  {item.confidence ? (
-                    <Text style={{ color: '#002511', fontSize: 9, fontWeight: '700' }}>
-                      {Math.round(item.confidence * 100)}%
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-
           {isOnline && (
             <>
               {/* Overlay Top Left: Camera ID & FPS */}
@@ -359,24 +297,25 @@ export const CameraPopup: React.FC<Props> = ({
                 style={[
                   styles.liveBadge,
                   {
-                    backgroundColor: aiStreamActive && !aiStreamError ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.85)',
-                    borderColor: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.border,
+                    backgroundColor: isDetectionActive && aiStreamActive && !aiStreamError ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.85)',
+                    borderColor: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.border,
                     borderWidth: 1,
                   }
                 ]}
                 onPress={() => {
-                  if (aiStreamError) {
-                    setAiStreamError(false);
+                  if (!isDetectionActive) {
+                    setIsDetectionActive(true);
                     setAiStreamActive(true);
+                    setAiStreamError(false);
                   } else {
                     setAiStreamActive(!aiStreamActive);
                   }
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.pulseDot, { backgroundColor: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]} />
-                <Text style={[styles.liveText, { color: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]}>
-                  {aiStreamActive && !aiStreamError ? 'AI LIVE (25 FPS)' : 'RAW VIDEO'}
+                <View style={[styles.pulseDot, { backgroundColor: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]} />
+                <Text style={[styles.liveText, { color: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]}>
+                  {isDetectionActive && aiStreamActive && !aiStreamError ? 'AI LIVE (25 FPS)' : 'RAW VIDEO'}
                 </Text>
               </TouchableOpacity>
 
@@ -389,23 +328,34 @@ export const CameraPopup: React.FC<Props> = ({
         </View>
 
         {/* AI Detection Trigger & Live Feedback */}
-        {detectedNotice ? (
-          <View style={[styles.detectedNoticeBox, { backgroundColor: colors.accentGreen + '20', borderColor: colors.accentGreen }]}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.accentGreen} />
+        {detectedNotice && (
+          <View style={[styles.detectedNoticeBox, { backgroundColor: (isDetectionActive ? colors.accentGreen : '#ef4444') + '20', borderColor: isDetectionActive ? colors.accentGreen : '#ef4444' }]}>
+            <Ionicons name={isDetectionActive ? "checkmark-circle" : "stop-circle"} size={18} color={isDetectionActive ? colors.accentGreen : '#ef4444'} />
             <Text style={[styles.detectedNoticeText, { color: colors.text }]}>{detectedNotice}</Text>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.startFeedBtn, { backgroundColor: colors.accent }]}
-            onPress={handleTriggerDetection}
-            disabled={isDetecting}
-          >
-            <Ionicons name="scan-circle-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.startFeedBtnText}>
-              {isDetecting ? 'Running AI Detection...' : '▶ Start AI Detection'}
-            </Text>
-          </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          style={[
+            styles.startFeedBtn,
+            { backgroundColor: isDetectionActive ? '#ef4444' : colors.accent }
+          ]}
+          onPress={handleToggleDetection}
+          disabled={isDetecting}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={isDetectionActive ? "stop-circle-outline" : "play-circle-outline"}
+            size={20}
+            color="#ffffff"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.startFeedBtnText}>
+            {isDetecting
+              ? (isDetectionActive ? 'Stopping AI Detection...' : 'Starting AI Detection...')
+              : (isDetectionActive ? '⏹ Stop AI Detection' : '▶ Start AI Detection')}
+          </Text>
+        </TouchableOpacity>
 
         {/* Traffic Level Banner */}
         <View style={[styles.trafficBanner, { backgroundColor: colors.surfaceLight, borderColor: trafficColor }]}>
