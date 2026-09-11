@@ -61,10 +61,10 @@ export const CameraPopup: React.FC<Props> = ({
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
-  const [isDetectionActive, setIsDetectionActive] = React.useState(true);
+  const [isDetectionActive, setIsDetectionActive] = React.useState(false);
   const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
-  const [aiStreamActive, setAiStreamActive] = React.useState(true);
+  const [aiStreamActive, setAiStreamActive] = React.useState(false);
   const [aiStreamError, setAiStreamError] = React.useState(false);
 
   const formatTime = (timeStr?: string) => {
@@ -109,12 +109,19 @@ export const CameraPopup: React.FC<Props> = ({
   };
 
   React.useEffect(() => {
-    if (!visible || !camera) return;
+    if (!visible || !camera) {
+      setIsDetectionActive(false);
+      setAiStreamActive(false);
+      return;
+    }
+    setIsDetectionActive(false);
+    setAiStreamActive(false);
+    setAiStreamError(false);
     const interval = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString());
     }, 1000);
     return () => clearInterval(interval);
-  }, [visible, camera]);
+  }, [visible, camera?.id]);
 
   if (!camera || !visible) return null;
 
