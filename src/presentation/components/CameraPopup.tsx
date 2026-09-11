@@ -62,6 +62,7 @@ export const CameraPopup: React.FC<Props> = ({
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
   const [isDetecting, setIsDetecting] = React.useState(false);
   const [isDetectionActive, setIsDetectionActive] = React.useState(false);
+  const [streamSessionId, setStreamSessionId] = React.useState<number>(() => Date.now());
   const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
   const [aiStreamActive, setAiStreamActive] = React.useState(false);
@@ -134,6 +135,7 @@ export const CameraPopup: React.FC<Props> = ({
         await CameraApi.stopCameraDetection(camera.id);
         setIsDetectionActive(false);
         setAiStreamActive(false);
+        setStreamSessionId(Date.now());
         setDetectedNotice(`AI Detection stopped for ${camera.name}`);
         setTimeout(() => setDetectedNotice(null), 3000);
       } else {
@@ -143,6 +145,7 @@ export const CameraPopup: React.FC<Props> = ({
         } else {
           await CameraApi.triggerCameraDetection(camera.id, 'auto');
         }
+        setStreamSessionId(Date.now());
         setIsDetectionActive(true);
         setAiStreamActive(true);
         setAiStreamError(false);
@@ -244,10 +247,10 @@ export const CameraPopup: React.FC<Props> = ({
         <View style={[styles.feedContainer, { backgroundColor: '#000000', borderColor: colors.border }]}>
           {isOnline ? (
             Platform.OS === 'web' ? (
-              isDetectionActive && aiStreamActive && !aiStreamError ? (
+              isDetectionActive ? (
                 React.createElement('img', {
-                  key: `ai_stream_${camera.id}`,
-                  src: `http://localhost:8000/api/v1/cameras/${camera.id}/stream`,
+                  key: `ai_stream_${camera.id}_${streamSessionId}`,
+                  src: `http://localhost:8000/api/v1/cameras/${camera.id}/stream?t=${streamSessionId}`,
                   alt: 'Live AI Video Feed',
                   style: {
                     width: '100%',
@@ -255,10 +258,6 @@ export const CameraPopup: React.FC<Props> = ({
                     objectFit: 'cover',
                     borderRadius: 10,
                     display: 'block',
-                  },
-                  onError: () => {
-                    console.warn('[CameraPopup] AI stream offline, switching to raw video.');
-                    setAiStreamError(true);
                   },
                 })
               ) : (
@@ -304,25 +303,17 @@ export const CameraPopup: React.FC<Props> = ({
                 style={[
                   styles.liveBadge,
                   {
-                    backgroundColor: isDetectionActive && aiStreamActive && !aiStreamError ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.85)',
-                    borderColor: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.border,
+                    backgroundColor: isDetectionActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.85)',
+                    borderColor: isDetectionActive ? colors.accentGreen : colors.border,
                     borderWidth: 1,
                   }
                 ]}
-                onPress={() => {
-                  if (!isDetectionActive) {
-                    setIsDetectionActive(true);
-                    setAiStreamActive(true);
-                    setAiStreamError(false);
-                  } else {
-                    setAiStreamActive(!aiStreamActive);
-                  }
-                }}
+                onPress={handleToggleDetection}
                 activeOpacity={0.7}
               >
-                <View style={[styles.pulseDot, { backgroundColor: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]} />
-                <Text style={[styles.liveText, { color: isDetectionActive && aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]}>
-                  {isDetectionActive && aiStreamActive && !aiStreamError ? 'AI LIVE (25 FPS)' : 'RAW VIDEO'}
+                <View style={[styles.pulseDot, { backgroundColor: isDetectionActive ? colors.accentGreen : colors.textMuted }]} />
+                <Text style={[styles.liveText, { color: isDetectionActive ? colors.accentGreen : colors.textMuted }]}>
+                  {isDetectionActive ? 'AI LIVE (25 FPS)' : 'RAW VIDEO'}
                 </Text>
               </TouchableOpacity>
 
