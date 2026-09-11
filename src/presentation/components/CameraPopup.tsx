@@ -63,6 +63,8 @@ export const CameraPopup: React.FC<Props> = ({
   const [isDetecting, setIsDetecting] = React.useState(false);
   const [detectedNotice, setDetectedNotice] = React.useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
+  const [aiStreamActive, setAiStreamActive] = React.useState(true);
+  const [aiStreamError, setAiStreamError] = React.useState(false);
 
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '';
@@ -233,20 +235,39 @@ export const CameraPopup: React.FC<Props> = ({
         <View style={[styles.feedContainer, { backgroundColor: '#000000', borderColor: colors.border }]}>
           {isOnline ? (
             Platform.OS === 'web' ? (
-              React.createElement('video', {
-                key: `${camera.id}_${camera.streamUrl || camera.stream_url || ''}`,
-                src: camera.streamUrl || camera.stream_url || (camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4'),
-                autoPlay: true,
-                loop: true,
-                muted: true,
-                playsInline: true,
-                style: {
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  borderRadius: 10,
-                },
-              })
+              aiStreamActive && !aiStreamError ? (
+                React.createElement('img', {
+                  key: `ai_stream_${camera.id}`,
+                  src: `http://localhost:8000/api/v1/cameras/${camera.id}/stream`,
+                  alt: 'Live AI Video Feed',
+                  style: {
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    borderRadius: 10,
+                    display: 'block',
+                  },
+                  onError: () => {
+                    console.warn('[CameraPopup] AI stream offline, switching to raw video.');
+                    setAiStreamError(true);
+                  },
+                })
+              ) : (
+                React.createElement('video', {
+                  key: `${camera.id}_${camera.streamUrl || camera.stream_url || ''}`,
+                  src: camera.streamUrl || camera.stream_url || (camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4'),
+                  autoPlay: true,
+                  loop: true,
+                  muted: true,
+                  playsInline: true,
+                  style: {
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    borderRadius: 10,
+                  },
+                })
+              )
             ) : (
               <View style={styles.feedCenterContent}>
                 <Ionicons name="videocam" size={36} color={colors.accent} />
@@ -260,8 +281,8 @@ export const CameraPopup: React.FC<Props> = ({
             </View>
           )}
 
-          {/* Real-time AI Bounding Box Overlays */}
-          {isOnline && activeBoundingBoxes.map((item) => {
+          {/* Real-time AI Bounding Box Overlays (Only when on raw video mode) */}
+          {isOnline && (!aiStreamActive || aiStreamError) && activeBoundingBoxes.map((item) => {
             const b = item.boundingBox!;
             const fw = b.frame_width || 768;
             const fh = b.frame_height || 432;
@@ -333,11 +354,31 @@ export const CameraPopup: React.FC<Props> = ({
                 <Text style={styles.feedOverlayFpsText}>• {camera.fps} FPS</Text>
               </View>
 
-              {/* Overlay Top Right: Live Badge */}
-              <View style={styles.liveBadge}>
-                <View style={[styles.pulseDot, { backgroundColor: colors.accentGreen }]} />
-                <Text style={[styles.liveText, { color: colors.accentGreen }]}>LIVE</Text>
-              </View>
+              {/* Overlay Top Right: Live Badge & Mode Switcher */}
+              <TouchableOpacity
+                style={[
+                  styles.liveBadge,
+                  {
+                    backgroundColor: aiStreamActive && !aiStreamError ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.85)',
+                    borderColor: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.border,
+                    borderWidth: 1,
+                  }
+                ]}
+                onPress={() => {
+                  if (aiStreamError) {
+                    setAiStreamError(false);
+                    setAiStreamActive(true);
+                  } else {
+                    setAiStreamActive(!aiStreamActive);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.pulseDot, { backgroundColor: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]} />
+                <Text style={[styles.liveText, { color: aiStreamActive && !aiStreamError ? colors.accentGreen : colors.textMuted }]}>
+                  {aiStreamActive && !aiStreamError ? 'AI LIVE (25 FPS)' : 'RAW VIDEO'}
+                </Text>
+              </TouchableOpacity>
 
               {/* Overlay Bottom Right: Timecode */}
               <View style={styles.feedOverlayTime}>
