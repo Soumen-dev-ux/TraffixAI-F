@@ -10,6 +10,8 @@ export function getMapHtmlContent(): string {
   <title>MapLibre Traffic Map</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map {
@@ -108,19 +110,25 @@ export function getMapHtmlContent(): string {
       100% { transform: scale(0.85); opacity: 0.9; }
     }
     .vehicle-plate-pill {
-      margin-top: -6px;
       background: rgba(15, 23, 42, 0.95);
       color: #38bdf8;
       font-size: 11px;
       font-weight: 800;
-      padding: 3px 9px;
+      padding: 4px 10px;
       border-radius: 6px;
       border: 1.5px solid #38bdf8;
       white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.65), 0 0 12px rgba(56, 189, 248, 0.4);
-      pointer-events: none;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.7), 0 0 12px rgba(56, 189, 248, 0.5);
       letter-spacing: 0.6px;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      margin-bottom: 8px;
+    }
+    .vehicle-plate-pill:hover {
+      transform: scale(1.12) translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.85), 0 0 16px rgba(56, 189, 248, 0.85);
     }
     .detection-marker {
       width: 26px;
@@ -611,6 +619,21 @@ export function getMapHtmlContent(): string {
       }
     }
 
+    function initVehicle3DLayer() {
+      if (typeof THREE === 'undefined') {
+        setTimeout(initVehicle3DLayer, 100);
+        return;
+      }
+      if (!map || !map.isStyleLoaded()) return;
+      if (!map.getLayer('3d-vehicle-layer')) {
+        try {
+          map.addLayer(vehicle3DLayer);
+        } catch(e) {
+          console.warn('Vehicle 3D layer add error:', e);
+        }
+      }
+    }
+
     map.on('style.load', function() {
       try {
         map.setLight({
@@ -620,12 +643,14 @@ export function getMapHtmlContent(): string {
           position: [1.15, 210, 30]
         });
       } catch(e) {}
+      initVehicle3DLayer();
       setupReady();
       updateTrajectorySource();
       renderSvgRoute();
     });
 
     map.on('load', function() {
+      initVehicle3DLayer();
       setupReady();
       updateTrajectorySource();
       renderSvgRoute();
@@ -641,215 +666,355 @@ export function getMapHtmlContent(): string {
 
     // Fallback: If style.load or load delays due to network/tile issues, initialize immediately
     setTimeout(function() {
+      initVehicle3DLayer();
       setupReady();
     }, 250);
 
-    function get3DVehicleSvg(type, colorName) {
+    // Three.js 3D WebGL Vehicle Model Builder & Layer
+    function build3DVehicleMesh(type, colorName) {
+      var group = new THREE.Group();
       var vType = (type || 'car').toLowerCase();
       var cName = (colorName || 'Silver').toLowerCase();
 
-      var bodyPrimary = '#475569';
-      var bodySecondary = '#334155';
-      var bodyDark = '#1e293b';
-      var bodyHighlight = '#94a3b8';
-      var roofGlass = '#0284c7';
+      var bodyHex = 0x94a3b8; // Silver default
+      if (cName.includes('yellow') || vType === 'taxi') bodyHex = 0xeab308;
+      else if (cName.includes('white')) bodyHex = 0xf8fafc;
+      else if (cName.includes('black') || cName.includes('dark')) bodyHex = 0x0f172a;
+      else if (cName.includes('red')) bodyHex = 0xef4444;
+      else if (cName.includes('blue')) bodyHex = 0x2563eb;
+      else if (cName.includes('green')) bodyHex = 0x16a34a;
+      else if (cName.includes('orange')) bodyHex = 0xf97316;
+      else if (cName.includes('grey') || cName.includes('gray')) bodyHex = 0x64748b;
 
-      if (cName.includes('yellow') || vType === 'taxi') {
-        bodyPrimary = '#eab308';
-        bodySecondary = '#ca8a04';
-        bodyDark = '#854d0e';
-        bodyHighlight = '#fef08a';
-      } else if (cName.includes('red')) {
-        bodyPrimary = '#ef4444';
-        bodySecondary = '#dc2626';
-        bodyDark = '#991b1b';
-        bodyHighlight = '#fca5a5';
-      } else if (cName.includes('white') || cName.includes('silver') || cName.includes('grey') || cName.includes('gray')) {
-        bodyPrimary = '#cbd5e1';
-        bodySecondary = '#94a3b8';
-        bodyDark = '#64748b';
-        bodyHighlight = '#f8fafc';
-      } else if (cName.includes('black') || cName.includes('dark')) {
-        bodyPrimary = '#1e293b';
-        bodySecondary = '#0f172a';
-        bodyDark = '#020617';
-        bodyHighlight = '#475569';
-      } else if (cName.includes('blue')) {
-        bodyPrimary = '#3b82f6';
-        bodySecondary = '#2563eb';
-        bodyDark = '#1d4ed8';
-        bodyHighlight = '#93c5fd';
-      } else if (cName.includes('green')) {
-        bodyPrimary = '#22c55e';
-        bodySecondary = '#16a34a';
-        bodyDark = '#15803d';
-        bodyHighlight = '#86efac';
+      var bodyMat = new THREE.MeshStandardMaterial({
+        color: bodyHex,
+        metalness: 0.82,
+        roughness: 0.22
+      });
+
+      var darkMat = new THREE.MeshStandardMaterial({
+        color: 0x0f172a,
+        metalness: 0.4,
+        roughness: 0.6
+      });
+
+      var tireMat = new THREE.MeshStandardMaterial({
+        color: 0x18181b,
+        metalness: 0.1,
+        roughness: 0.85
+      });
+
+      var rimMat = new THREE.MeshStandardMaterial({
+        color: 0xe2e8f0,
+        metalness: 0.95,
+        roughness: 0.15
+      });
+
+      var glassMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        metalness: 0.9,
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.85
+      });
+
+      var headlightMat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a
+      });
+
+      var taillightMat = new THREE.MeshBasicMaterial({
+        color: 0xef4444
+      });
+
+      var arrowMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.95
+      });
+
+      function createWheel(x, y, z, radius, width) {
+        var wheelGroup = new THREE.Group();
+        wheelGroup.position.set(x, y, z);
+
+        var tireGeo = new THREE.CylinderGeometry(radius, radius, width, 16);
+        tireGeo.rotateZ(Math.PI / 2);
+        var tireMesh = new THREE.Mesh(tireGeo, tireMat);
+        wheelGroup.add(tireMesh);
+
+        var rimGeo = new THREE.CylinderGeometry(radius * 0.65, radius * 0.65, width * 1.05, 12);
+        rimGeo.rotateZ(Math.PI / 2);
+        var rimMesh = new THREE.Mesh(rimGeo, rimMat);
+        wheelGroup.add(rimMesh);
+
+        return wheelGroup;
       }
 
-      // 1. 3D TRUCK
+      // Forward Direction Navigation Arrow Hovering Ahead
+      var arrowGroup = new THREE.Group();
+      arrowGroup.position.set(0, -3.2, 0.6);
+      var coneGeo = new THREE.ConeGeometry(0.55, 1.1, 12);
+      coneGeo.rotateX(-Math.PI / 2);
+      var coneMesh = new THREE.Mesh(coneGeo, arrowMat);
+      arrowGroup.add(coneMesh);
+      group.add(arrowGroup);
+
+      // Ground Asphalt Shadow
+      var shadowGeo = new THREE.PlaneGeometry(2.4, 5.0);
+      var shadowMat = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false
+      });
+      var shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.position.set(0, 0, 0.04);
+      group.add(shadowMesh);
+
       if (vType === 'truck') {
-        return '<svg width="78" height="110" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
-          '<defs>' +
-            '<linearGradient id="nav-arrow-glow" x1="0%" y1="0%" x2="0%" y2="100%">' +
-              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="1"/>' +
-              '<stop offset="100%" stop-color="#0284c7" stop-opacity="0.8"/>' +
-            '</linearGradient>' +
-          '</defs>' +
-          '<!-- Navigation Direction Arrow on Road -->' +
-          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#0284c7" stroke-width="2.5" />' +
-          '<!-- Asphalt Shadow -->' +
-          '<ellipse cx="50" cy="88" rx="26" ry="46" fill="rgba(0,0,0,0.6)" />' +
-          '<!-- Tandem Wheels -->' +
-          '<rect x="22" y="48" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="72" y="48" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="22" y="104" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="72" y="104" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="22" y="120" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="72" y="120" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<!-- Cargo Trailer Box -->' +
-          '<rect x="26" y="62" width="48" height="74" rx="4" fill="' + bodySecondary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
-          '<rect x="29" y="65" width="42" height="68" rx="2" fill="' + bodyPrimary + '" />' +
-          '<line x1="26" y1="84" x2="74" y2="84" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
-          '<line x1="26" y1="106" x2="74" y2="106" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
-          '<!-- Front Driver Cabin -->' +
-          '<path d="M28,62 L28,45 C28,40 34,36 50,36 C66,36 72,40 72,45 L72,62 Z" fill="' + bodyHighlight + '" />' +
-          '<path d="M30,46 L70,46 L68,54 L32,54 Z" fill="#0f172a" />' +
-          '<path d="M32,48 L68,48 L66,52 L34,52 Z" fill="' + roofGlass + '" opacity="0.85" />' +
-          '<circle cx="34" cy="38" r="3" fill="#fef08a" />' +
-          '<circle cx="66" cy="38" r="3" fill="#fef08a" />' +
-          '<rect x="23" y="47" width="5" height="3" rx="1.5" fill="' + bodyDark + '" />' +
-          '<rect x="72" y="47" width="5" height="3" rx="1.5" fill="' + bodyDark + '" />' +
-        '</svg>';
+        // 1. TRUCK MODEL
+        var cabGeo = new THREE.BoxGeometry(2.2, 2.2, 2.4);
+        var cabMesh = new THREE.Mesh(cabGeo, bodyMat);
+        cabMesh.position.set(0, -1.8, 1.5);
+        group.add(cabMesh);
+
+        var cabGlassGeo = new THREE.BoxGeometry(2.0, 0.2, 0.9);
+        var cabGlassMesh = new THREE.Mesh(cabGlassGeo, glassMat);
+        cabGlassMesh.position.set(0, -2.85, 1.8);
+        group.add(cabGlassMesh);
+
+        var cargoGeo = new THREE.BoxGeometry(2.4, 5.2, 2.8);
+        var cargoMesh = new THREE.Mesh(cargoGeo, bodyMat);
+        cargoMesh.position.set(0, 1.8, 1.7);
+        group.add(cargoMesh);
+
+        group.add(createWheel(-1.15, -1.8, 0.45, 0.45, 0.3));
+        group.add(createWheel(1.15, -1.8, 0.45, 0.45, 0.3));
+        group.add(createWheel(-1.15, 1.5, 0.45, 0.45, 0.3));
+        group.add(createWheel(1.15, 1.5, 0.45, 0.45, 0.3));
+        group.add(createWheel(-1.15, 3.2, 0.45, 0.45, 0.3));
+        group.add(createWheel(1.15, 3.2, 0.45, 0.45, 0.3));
+
+        var hl1 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.25), headlightMat);
+        hl1.position.set(-0.8, -2.92, 0.8);
+        group.add(hl1);
+        var hl2 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.25), headlightMat);
+        hl2.position.set(0.8, -2.92, 0.8);
+        group.add(hl2);
+
+      } else if (vType === 'bus') {
+        // 2. BUS MODEL
+        var busGeo = new THREE.BoxGeometry(2.4, 8.4, 2.6);
+        var busMesh = new THREE.Mesh(busGeo, bodyMat);
+        busMesh.position.set(0, 0, 1.6);
+        group.add(busMesh);
+
+        var busGlassFront = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.2, 1.2), glassMat);
+        busGlassFront.position.set(0, -4.15, 1.7);
+        group.add(busGlassFront);
+
+        var busSideGlass1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 6.8, 0.8), glassMat);
+        busSideGlass1.position.set(-1.22, 0.2, 1.7);
+        group.add(busSideGlass1);
+        var busSideGlass2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 6.8, 0.8), glassMat);
+        busSideGlass2.position.set(1.22, 0.2, 1.7);
+        group.add(busSideGlass2);
+
+        var acGeo = new THREE.BoxGeometry(1.4, 2.6, 0.35);
+        var acMesh = new THREE.Mesh(acGeo, darkMat);
+        acMesh.position.set(0, 0, 2.95);
+        group.add(acMesh);
+
+        group.add(createWheel(-1.2, -2.6, 0.5, 0.5, 0.32));
+        group.add(createWheel(1.2, -2.6, 0.5, 0.5, 0.32));
+        group.add(createWheel(-1.2, 2.6, 0.5, 0.5, 0.32));
+        group.add(createWheel(1.2, 2.6, 0.5, 0.5, 0.32));
+
+        var bhl1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.3), headlightMat);
+        bhl1.position.set(-0.85, -4.22, 0.7);
+        group.add(bhl1);
+        var bhl2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.3), headlightMat);
+        bhl2.position.set(0.85, -4.22, 0.7);
+        group.add(bhl2);
+
+      } else if (vType === 'motorcycle' || vType === 'bike' || vType === 'motorbike') {
+        // 3. MOTORCYCLE / BIKE MODEL
+        var frameGeo = new THREE.BoxGeometry(0.45, 1.6, 0.6);
+        var frameMesh = new THREE.Mesh(frameGeo, bodyMat);
+        frameMesh.position.set(0, 0, 0.7);
+        group.add(frameMesh);
+
+        var seatGeo = new THREE.BoxGeometry(0.4, 0.7, 0.2);
+        var seatMesh = new THREE.Mesh(seatGeo, darkMat);
+        seatMesh.position.set(0, 0.3, 0.9);
+        group.add(seatMesh);
+
+        var barGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.9, 8);
+        barGeo.rotateZ(Math.PI / 2);
+        var barMesh = new THREE.Mesh(barGeo, rimMat);
+        barMesh.position.set(0, -0.6, 1.05);
+        group.add(barMesh);
+
+        var riderTorso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.65), darkMat);
+        riderTorso.position.set(0, 0.2, 1.3);
+        group.add(riderTorso);
+        var riderHelmet = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), bodyMat);
+        riderHelmet.position.set(0, 0.15, 1.75);
+        group.add(riderHelmet);
+
+        group.add(createWheel(0, -0.9, 0.38, 0.38, 0.14));
+        group.add(createWheel(0, 0.9, 0.38, 0.38, 0.14));
+
+        var mhl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), headlightMat);
+        mhl.position.set(0, -0.95, 0.85);
+        group.add(mhl);
+
+      } else {
+        // 4. SEDAN / SUV / CAR (DEFAULT)
+        var lowerGeo = new THREE.BoxGeometry(2.0, 4.4, 0.65);
+        var lowerMesh = new THREE.Mesh(lowerGeo, bodyMat);
+        lowerMesh.position.set(0, 0, 0.58);
+        group.add(lowerMesh);
+
+        var hoodGeo = new THREE.BoxGeometry(1.9, 1.3, 0.25);
+        var hoodMesh = new THREE.Mesh(hoodGeo, bodyMat);
+        hoodMesh.position.set(0, -1.4, 0.8);
+        group.add(hoodMesh);
+
+        var cabinGeo = new THREE.BoxGeometry(1.65, 2.1, 0.62);
+        var cabinMesh = new THREE.Mesh(cabinGeo, bodyMat);
+        cabinMesh.position.set(0, 0.1, 1.15);
+        group.add(cabinMesh);
+
+        var frontWindshield = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.1, 0.55), glassMat);
+        frontWindshield.position.set(0, -0.95, 1.12);
+        frontWindshield.rotation.x = Math.PI / 6;
+        group.add(frontWindshield);
+
+        var rearWindshield = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.1, 0.5), glassMat);
+        rearWindshield.position.set(0, 1.12, 1.12);
+        rearWindshield.rotation.x = -Math.PI / 6;
+        group.add(rearWindshield);
+
+        var sideGlass1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7, 0.45), glassMat);
+        sideGlass1.position.set(-0.82, 0.1, 1.12);
+        group.add(sideGlass1);
+        var sideGlass2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7, 0.45), glassMat);
+        sideGlass2.position.set(0.82, 0.1, 1.12);
+        group.add(sideGlass2);
+
+        var roofGlass = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.05), glassMat);
+        roofGlass.position.set(0, 0.1, 1.46);
+        group.add(roofGlass);
+
+        var mirror1 = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.12), bodyMat);
+        mirror1.position.set(-1.05, -0.7, 0.95);
+        group.add(mirror1);
+        var mirror2 = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.12), bodyMat);
+        mirror2.position.set(1.05, -0.7, 0.95);
+        group.add(mirror2);
+
+        group.add(createWheel(-1.0, -1.3, 0.35, 0.35, 0.22));
+        group.add(createWheel(1.0, -1.3, 0.35, 0.35, 0.22));
+        group.add(createWheel(-1.0, 1.3, 0.35, 0.35, 0.22));
+        group.add(createWheel(1.0, 1.3, 0.35, 0.35, 0.22));
+
+        var chl1 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.18), headlightMat);
+        chl1.position.set(-0.72, -2.18, 0.65);
+        group.add(chl1);
+        var chl2 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.18), headlightMat);
+        chl2.position.set(0.72, -2.18, 0.65);
+        group.add(chl2);
+
+        var ctl1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.15), taillightMat);
+        ctl1.position.set(-0.7, 2.18, 0.68);
+        group.add(ctl1);
+        var ctl2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.15), taillightMat);
+        ctl2.position.set(0.7, 2.18, 0.68);
+        group.add(ctl2);
       }
 
-      // 2. 3D BUS
-      if (vType === 'bus') {
-        return '<svg width="78" height="110" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
-          '<!-- Navigation Direction Arrow -->' +
-          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#16a34a" stroke-width="2.5" />' +
-          '<!-- Shadow -->' +
-          '<ellipse cx="50" cy="86" rx="26" ry="46" fill="rgba(0,0,0,0.6)" />' +
-          '<!-- Bus Aerodynamic Body -->' +
-          '<rect x="25" y="40" width="50" height="94" rx="10" fill="' + bodySecondary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
-          '<rect x="27" y="42" width="46" height="90" rx="8" fill="' + bodyPrimary + '" />' +
-          '<!-- Front Panoramic Windshield -->' +
-          '<path d="M30,44 C36,40 64,40 70,44 L68,55 L32,55 Z" fill="#0f172a" />' +
-          '<path d="M32,46 C38,43 62,43 68,46 L66,53 L34,53 Z" fill="' + roofGlass + '" opacity="0.85" />' +
-          '<!-- Passenger Side Windows Strip -->' +
-          '<rect x="28" y="58" width="8" height="70" rx="2" fill="#0f172a" />' +
-          '<rect x="64" y="58" width="8" height="70" rx="2" fill="#0f172a" />' +
-          '<!-- Roof AC & Vents -->' +
-          '<rect x="42" y="66" width="16" height="36" rx="3" fill="#64748b" />' +
-          '<!-- Headlights -->' +
-          '<circle cx="32" cy="42" r="3" fill="#fef08a" />' +
-          '<circle cx="68" cy="42" r="3" fill="#fef08a" />' +
-        '</svg>';
-      }
-
-      // 3. 3D MOTORCYCLE / BIKE
-      if (vType === 'motorcycle' || vType === 'bike' || vType === 'motorbike') {
-        return '<svg width="68" height="96" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
-          '<!-- Navigation Direction Arrow -->' +
-          '<polygon points="50,4 40,22 46,20 46,32 54,32 54,20 60,22" fill="#ffffff" stroke="#f59e0b" stroke-width="2.5" />' +
-          '<!-- Shadow -->' +
-          '<ellipse cx="50" cy="85" rx="16" ry="32" fill="rgba(0,0,0,0.6)" />' +
-          '<!-- Front & Rear Wheels -->' +
-          '<rect x="47" y="36" width="6" height="22" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="1.5" />' +
-          '<rect x="47" y="98" width="6" height="26" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="1.5" />' +
-          '<!-- Chassis Body & Tank -->' +
-          '<path d="M44,56 L56,56 L58,86 L42,86 Z" fill="' + bodyPrimary + '" />' +
-          '<!-- Handlebars -->' +
-          '<line x1="30" y1="52" x2="70" y2="52" stroke="#e2e8f0" stroke-width="3.5" stroke-linecap="round" />' +
-          '<circle cx="29" cy="52" r="2.5" fill="#0f172a" />' +
-          '<circle cx="71" cy="52" r="2.5" fill="#0f172a" />' +
-          '<!-- Rider Helmet & Shoulders -->' +
-          '<ellipse cx="50" cy="74" rx="9" ry="11" fill="#0f172a" stroke="' + bodyHighlight + '" stroke-width="1.5" />' +
-          '<ellipse cx="50" cy="70" rx="6" ry="3" fill="#38bdf8" />' +
-          '<circle cx="50" cy="40" r="3.5" fill="#fef08a" />' +
-        '</svg>';
-      }
-
-      // 4. 3D VAN
-      if (vType === 'van') {
-        return '<svg width="76" height="106" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
-          '<!-- Navigation Direction Arrow -->' +
-          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#0284c7" stroke-width="2.5" />' +
-          '<!-- Shadow -->' +
-          '<ellipse cx="50" cy="85" rx="26" ry="42" fill="rgba(0,0,0,0.6)" />' +
-          '<!-- Wheels -->' +
-          '<rect x="22" y="52" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="72" y="52" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="22" y="102" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<rect x="72" y="102" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
-          '<!-- Body -->' +
-          '<rect x="26" y="44" width="48" height="82" rx="8" fill="' + bodyPrimary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
-          '<!-- Windshield -->' +
-          '<path d="M30,50 C36,46 64,46 70,50 L68,60 L32,60 Z" fill="#0f172a" />' +
-          '<path d="M32,52 C38,48 62,48 68,52 L66,58 L34,58 Z" fill="' + roofGlass + '" opacity="0.85" />' +
-          '<!-- Side Windows -->' +
-          '<rect x="28" y="64" width="5" height="18" rx="1.5" fill="#0f172a" />' +
-          '<rect x="67" y="64" width="5" height="18" rx="1.5" fill="#0f172a" />' +
-          '<circle cx="32" cy="46" r="3" fill="#fef08a" />' +
-          '<circle cx="68" cy="46" r="3" fill="#fef08a" />' +
-        '</svg>';
-      }
-
-      // 5. 3D SUV / SEDAN / CAR (Google Maps 3D Navigation Model)
-      return '<svg width="76" height="106" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
-        '<defs>' +
-          '<linearGradient id="car-hood-grad" x1="0%" y1="0%" x2="0%" y2="100%">' +
-            '<stop offset="0%" stop-color="' + bodyHighlight + '"/>' +
-            '<stop offset="100%" stop-color="' + bodyPrimary + '"/>' +
-          '</linearGradient>' +
-          '<linearGradient id="windshield-glare" x1="0%" y1="0%" x2="100%" y2="100%">' +
-            '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>' +
-            '<stop offset="70%" stop-color="#0284c7" stop-opacity="0.85"/>' +
-            '<stop offset="100%" stop-color="#0f172a" stop-opacity="0.95"/>' +
-          '</linearGradient>' +
-        '</defs>' +
-        '<!-- Navigation Forward Arrow (Google Maps Style) -->' +
-        '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" />' +
-        '<!-- Ambient Ground Halo -->' +
-        '<ellipse cx="50" cy="85" rx="30" ry="38" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4 4" class="radar-pulse" />' +
-        '<!-- Ground Asphalt Shadow -->' +
-        '<ellipse cx="50" cy="86" rx="25" ry="36" fill="rgba(0,0,0,0.65)" />' +
-        '<!-- 4 3D Rubber Wheels with Silver Rims -->' +
-        '<rect x="20" y="52" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-        '<rect x="22" y="56" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
-        '<rect x="73" y="52" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-        '<rect x="75" y="56" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
-        '<rect x="20" y="98" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-        '<rect x="22" y="102" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
-        '<rect x="73" y="98" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-        '<rect x="75" y="102" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
-        '<!-- 3D Car Body Chassis -->' +
-        '<path d="M26,52 C26,44 34,40 50,40 C66,40 74,44 74,52 L74,116 C74,122 66,126 50,126 C34,126 26,122 26,116 Z" fill="url(#car-hood-grad)" stroke="' + bodyDark + '" stroke-width="1.5" />' +
-        '<!-- Hood Character Lines -->' +
-        '<line x1="38" y1="42" x2="40" y2="58" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />' +
-        '<line x1="62" y1="42" x2="60" y2="58" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />' +
-        '<!-- Front Windshield -->' +
-        '<path d="M32,60 C38,56 62,56 68,60 L65,74 L35,74 Z" fill="#0f172a" />' +
-        '<path d="M34,62 C40,58 60,58 66,62 L64,72 L36,72 Z" fill="url(#windshield-glare)" />' +
-        '<!-- Roof Panel & Rails -->' +
-        '<rect x="34" y="74" width="32" height="28" rx="3" fill="' + bodySecondary + '" />' +
-        '<line x1="34" y1="76" x2="34" y2="100" stroke="#334155" stroke-width="2" stroke-linecap="round" />' +
-        '<line x1="66" y1="76" x2="66" y2="100" stroke="#334155" stroke-width="2" stroke-linecap="round" />' +
-        '<!-- Rear Windshield Glass -->' +
-        '<path d="M34,103 L66,103 L68,113 L32,113 Z" fill="#0f172a" />' +
-        '<path d="M36,104 L64,104 L66,111 L34,111 Z" fill="' + roofGlass + '" opacity="0.75" />' +
-        '<!-- Side Mirrors -->' +
-        '<rect x="18" y="58" width="8" height="4" rx="2" fill="' + bodyDark + '" />' +
-        '<rect x="74" y="58" width="8" height="4" rx="2" fill="' + bodyDark + '" />' +
-        '<!-- Headlights (Twin Glowing Xenon) -->' +
-        '<circle cx="32" cy="44" r="3.2" fill="#fef08a" />' +
-        '<circle cx="32" cy="44" r="1.5" fill="#ffffff" />' +
-        '<circle cx="68" cy="44" r="3.2" fill="#fef08a" />' +
-        '<circle cx="68" cy="44" r="1.5" fill="#ffffff" />' +
-        '<!-- Taillights (Red LED Bar) -->' +
-        '<rect x="29" y="122" width="10" height="3" rx="1.5" fill="#ef4444" />' +
-        '<rect x="61" y="122" width="10" height="3" rx="1.5" fill="#ef4444" />' +
-      '</svg>';
+      return group;
     }
+
+    var currentVehicleData = null;
+    var vehicleScene = null;
+    var vehicleGroup = null;
+    var vehicleThreeCamera = null;
+    var vehicleThreeRenderer = null;
+    var currentModelKey = null;
+
+    var vehicle3DLayer = {
+      id: '3d-vehicle-layer',
+      type: 'custom',
+      renderingMode: '3d',
+      onAdd: function (mapInstance, gl) {
+        if (typeof THREE === 'undefined') return;
+        vehicleThreeCamera = new THREE.Camera();
+        vehicleScene = new THREE.Scene();
+
+        var ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
+        vehicleScene.add(ambientLight);
+
+        var sunLight = new THREE.DirectionalLight(0xffffff, 1.8);
+        sunLight.position.set(30, -80, 100).normalize();
+        vehicleScene.add(sunLight);
+
+        var groundLight = new THREE.DirectionalLight(0x38bdf8, 0.7);
+        groundLight.position.set(-30, 80, -20).normalize();
+        vehicleScene.add(groundLight);
+
+        vehicleGroup = new THREE.Group();
+        vehicleScene.add(vehicleGroup);
+
+        vehicleThreeRenderer = new THREE.WebGLRenderer({
+          canvas: mapInstance.getCanvas(),
+          context: gl,
+          antialias: true
+        });
+        vehicleThreeRenderer.autoClear = false;
+      },
+      render: function (gl, matrix) {
+        if (!vehicleThreeRenderer || !vehicleThreeCamera || !vehicleScene) return;
+        if (!currentVehicleData || isNaN(currentVehicleData.latitude) || isNaN(currentVehicleData.longitude)) {
+          if (vehicleGroup) vehicleGroup.visible = false;
+          return;
+        }
+
+        vehicleGroup.visible = true;
+
+        var vType = (currentVehicleData.vehicleType || currentVehicleData.type || 'car').toLowerCase();
+        var vColor = (currentVehicleData.color || 'Silver').toLowerCase();
+        var modelKey = vType + ':' + vColor;
+
+        if (modelKey !== currentModelKey) {
+          currentModelKey = modelKey;
+          while (vehicleGroup.children.length > 0) {
+            vehicleGroup.remove(vehicleGroup.children[0]);
+          }
+          var mesh = build3DVehicleMesh(vType, vColor);
+          vehicleGroup.add(mesh);
+        }
+
+        var coord = maplibregl.MercatorCoordinate.fromLngLat(
+          [Number(currentVehicleData.longitude), Number(currentVehicleData.latitude)],
+          0
+        );
+        var meterScale = coord.meterInMercatorCoordinateUnits();
+        var visualScale = meterScale * 4.2;
+
+        vehicleGroup.position.set(coord.x, coord.y, coord.z);
+        vehicleGroup.scale.set(visualScale, visualScale, visualScale);
+
+        var headingDeg = currentVehicleData.heading || 0;
+        vehicleGroup.rotation.set(0, 0, - (headingDeg * Math.PI / 180));
+
+        var m = new THREE.Matrix4().fromArray(matrix);
+        vehicleThreeCamera.projectionMatrix = m;
+
+        vehicleThreeRenderer.resetState();
+        vehicleThreeRenderer.render(vehicleScene, vehicleThreeCamera);
+      }
+    };
 
     function updateMap(data) {
       if (!data) return;
@@ -1030,25 +1195,14 @@ export function getMapHtmlContent(): string {
         applyRouteCoordinates([], false);
       }
 
-      // 4. Update Vehicle
+      // 4. Update Vehicle (3D WebGL Model + Floating Plate Label)
       if (vehicleMarker) {
         vehicleMarker.remove();
         vehicleMarker = null;
       }
-      if (vehicle) {
-        var vel = document.createElement('div');
-        vel.className = 'vehicle-marker';
+      if (vehicle && !isNaN(vehicle.latitude) && !isNaN(vehicle.longitude)) {
         var vType = vehicle.vehicleType || vehicle.type || 'car';
         var vColor = vehicle.color || 'Silver';
-        var vSvg = get3DVehicleSvg(vType, vColor);
-
-        vel.innerHTML = '<div class="vehicle-3d-wrapper">' +
-          vSvg +
-          '</div>' +
-          '<span class="vehicle-plate-pill">' + (vehicle.plateNumber || 'TARGET') + '</span>';
-
-        var vpopup = new maplibregl.Popup({ offset: 28 })
-          .setHTML('<strong style="color:#38bdf8; font-size:13px;">' + (vehicle.plateNumber || 'TARGET') + '</strong><br/><span style="color:#f1f5f9; font-weight:600;">' + (vehicle.color || '') + ' ' + (vType.toUpperCase()) + '</span><br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Tracking') + '</span>');
 
         var heading = 0;
         if (typeof vehicle.heading === 'number') {
@@ -1070,14 +1224,29 @@ export function getMapHtmlContent(): string {
           }
         }
 
+        currentVehicleData = {
+          latitude: Number(vehicle.latitude),
+          longitude: Number(vehicle.longitude),
+          heading: heading,
+          vehicleType: vType,
+          color: vColor,
+          plateNumber: vehicle.plateNumber,
+          speed: vehicle.speed
+        };
+
+        // Floating ANPR Plate Pill above the 3D Vehicle
+        var plateEl = document.createElement('div');
+        plateEl.className = 'vehicle-plate-pill';
+        plateEl.textContent = vehicle.plateNumber || 'TARGET';
+
+        var vpopup = new maplibregl.Popup({ offset: 32 })
+          .setHTML('<strong style="color:#38bdf8; font-size:13px;">' + (vehicle.plateNumber || 'TARGET') + '</strong><br/><span style="color:#f1f5f9; font-weight:600;">' + (vehicle.color || '') + ' ' + (vType.toUpperCase()) + '</span><br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Tracking') + '</span>');
+
         vehicleMarker = new maplibregl.Marker({
-          element: vel,
-          anchor: 'center',
-          rotationAlignment: 'map',
-          pitchAlignment: 'map',
-          rotation: heading
+          element: plateEl,
+          anchor: 'bottom'
         })
-          .setLngLat([vehicle.longitude, vehicle.latitude])
+          .setLngLat([Number(vehicle.longitude), Number(vehicle.latitude)])
           .setPopup(vpopup)
           .addTo(map);
 
@@ -1085,7 +1254,7 @@ export function getMapHtmlContent(): string {
         if (vKey !== lastVehicleKey && (!trajectory || !trajectory.detections || trajectory.detections.length <= 1)) {
           lastVehicleKey = vKey;
           map.flyTo({
-            center: [vehicle.longitude, vehicle.latitude],
+            center: [Number(vehicle.longitude), Number(vehicle.latitude)],
             zoom: 15.5,
             pitch: is3DCurrent ? 52 : 0,
             bearing: is3DCurrent ? -18 : 0,
@@ -1093,8 +1262,10 @@ export function getMapHtmlContent(): string {
           });
         }
       } else {
+        currentVehicleData = null;
         lastVehicleKey = null;
       }
+      map.triggerRepaint();
 
       // 5. Auto-fit cameras ONLY ONCE on initial map load (never interrupts user while navigating)
       if (!hasInitialFitted && !vehicle && (!trajectory || !trajectory.detections || trajectory.detections.length === 0)) {
