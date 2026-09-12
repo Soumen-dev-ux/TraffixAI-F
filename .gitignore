@@ -42,4 +42,16 @@ app-example
 /ios
 /android
 
+# Videos & Large Media
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+*.m4v
+public/videos/
+assets/videos/
+videos/
+
 
