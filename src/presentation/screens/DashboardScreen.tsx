@@ -171,74 +171,95 @@ export default function DashboardScreen() {
 
       if (event.type === 'vehicle_detection' && event.data) {
         const d = event.data as any;
-        const plate = d.plateNumber || d.plate_number || d.local_track_id || d.vehicleId;
+        const rawPlate = (d.plateNumber || d.plate_number || '').toString();
+        const isCleanPlate = rawPlate && !rawPlate.startsWith('UNREADABLE') && !rawPlate.startsWith('TRACK_') && !rawPlate.startsWith('CAM_') && !rawPlate.startsWith('NO_PLATE') && rawPlate !== '—';
+        const displayPlate = isCleanPlate ? rawPlate : '—';
         const camId = d.cameraId || d.camera_id;
         const camName = d.cameraName || d.camera_name || 'Park Street Junction';
         const detectedAt = d.timestamp || d.detectedAt || new Date().toISOString();
         const vType = d.vehicleType || d.vehicle_type || 'car';
+        const trackId = (d.localTrackId || d.local_track_id || '').toString();
+        const nowMs = Date.now();
+        const plate = displayPlate !== '—' ? displayPlate : (trackId || d.vehicleId || rawPlate || '—');
 
-        if (plate) {
-          const nowMs = Date.now();
-          const trackId = (d.localTrackId || d.local_track_id || '').toString();
+        setLiveDetections((prev) => {
+          const isExisting = prev.some((p) => {
+            if (trackId && p.localTrackId === trackId) return true;
+            if (isCleanPlate && p.plateNumber === displayPlate && (p.cameraId === camId || p.cameraName === camName)) return true;
+            if (isCleanPlate && p.plateNumber && p.plateNumber !== '—') {
+              const p1 = displayPlate.replace(/[^A-Z0-9]/g, '');
+              const p2 = p.plateNumber.replace(/[^A-Z0-9]/g, '');
+              if (p1.length >= 4 && p2.length >= 4 && p1.slice(-4) === p2.slice(-4)) return true;
+            }
+            const timeDiff = Math.abs(nowMs - (p.timestampMs || 0));
+            if ((p.cameraId === camId || p.cameraName === camName) && p.vehicleType === vType && timeDiff < 20000) {
+              return true;
+            }
+            return false;
+          });
 
-          setLiveDetections((prev) => {
-            const isExisting = prev.some(
-              (p) => (trackId && p.localTrackId === trackId) ||
-                     (p.plateNumber && p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName))
+          // 1. Only increment counter for brand-new vehicle tracks
+          if (!isExisting) {
+            setCameras((prevCams) =>
+              prevCams.map((cam) => {
+                if (cam.id === camId || cam.name === camName) {
+                  const newCount = (cam.vehicleCount || 0) + 1;
+                  return {
+                    ...cam,
+                    vehicleCount: newCount,
+                    trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
+                  };
+                }
+                return cam;
+              })
             );
 
-            // 1. Only increment counter for brand-new vehicle tracks (not on every frame!)
-            if (!isExisting) {
-              setCameras((prevCams) =>
-                prevCams.map((cam) => {
-                  if (cam.id === camId || cam.name === camName) {
-                    const newCount = (cam.vehicleCount || 0) + 1;
-                    return {
-                      ...cam,
-                      vehicleCount: newCount,
-                      trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
-                    };
-                  }
-                  return cam;
-                })
-              );
+            setAnalytics((prevAnalytics) => {
+              if (!prevAnalytics) return prevAnalytics;
+              return {
+                ...prevAnalytics,
+                totalVehicles: (prevAnalytics.totalVehicles || 0) + 1,
+              };
+            });
+          }
 
-              setAnalytics((prevAnalytics) => {
-                if (!prevAnalytics) return prevAnalytics;
-                return {
-                  ...prevAnalytics,
-                  totalVehicles: (prevAnalytics.totalVehicles || 0) + 1,
-                };
-              });
-            }
+          // 2. Upsert existing detection item or prepend new item
+          const newDet: DetectedVehicleItem = {
+            id: event.id || String(nowMs),
+            plateNumber: displayPlate,
+            cameraId: camId,
+            cameraName: camName,
+            detectedAt,
+            vehicleType: vType,
+            confidence: d.confidence || d.vehicle_confidence || 0.92,
+            boundingBox: d.boundingBox || d.bounding_box || null,
+            localTrackId: trackId || null,
+            inFrame: true,
+            timestampMs: nowMs,
+          };
 
-            // 2. Upsert existing detection item or prepend new item
-            const newDet: DetectedVehicleItem = {
-              id: event.id || String(nowMs),
-              plateNumber: plate,
-              cameraId: camId,
-              cameraName: camName,
-              detectedAt,
-              vehicleType: vType,
-              confidence: d.confidence || d.vehicle_confidence || 0.92,
-              boundingBox: d.boundingBox || d.bounding_box || null,
-              localTrackId: trackId || null,
-              inFrame: true,
-              timestampMs: nowMs,
-            };
+          const otherItems = prev
+            .filter((p) => {
+              if (trackId && p.localTrackId === trackId) return false;
+              if (isCleanPlate && p.plateNumber === displayPlate && (p.cameraId === camId || p.cameraName === camName)) return false;
+              if (isCleanPlate && p.plateNumber && p.plateNumber !== '—') {
+                const p1 = displayPlate.replace(/[^A-Z0-9]/g, '');
+                const p2 = p.plateNumber.replace(/[^A-Z0-9]/g, '');
+                if (p1.length >= 4 && p2.length >= 4 && p1.slice(-4) === p2.slice(-4)) return false;
+              }
+              const timeDiff = Math.abs(nowMs - (p.timestampMs || 0));
+              if ((p.cameraId === camId || p.cameraName === camName) && p.vehicleType === vType && timeDiff < 20000) {
+                return false;
+              }
+              return true;
+            })
+            .map((p) => ({
+              ...p,
+              inFrame: nowMs - (p.timestampMs || 0) < 25000,
+            }));
 
-            const otherItems = prev
-              .filter(
-                (p) => !((trackId && p.localTrackId === trackId) ||
-                         (p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName)))
-              )
-              .map((p) => ({
-                ...p,
-                inFrame: nowMs - (p.timestampMs || 0) < 25000,
-              }));
-
-            return [newDet, ...otherItems.slice(0, 48)];
-          });
+          return [newDet, ...otherItems.slice(0, 48)];
+        });
 
           // 4. Check for Multi-Camera Re-ID Match
           const trajDets = d.trajectory?.detections;
@@ -299,10 +320,9 @@ export default function DashboardScreen() {
             }
           }
         }
-      }
-    });
-    return unsubscribe;
-  }, []);
+      });
+      return unsubscribe;
+    }, []);
 
   const handleAddCamera = async (camData: {
     name: string;

@@ -91,27 +91,50 @@ export const CameraPopup: React.FC<Props> = ({
     const matched = sessionDetections.filter(
       (d) => !d.cameraId || d.cameraId === camera.id || d.cameraName === camera.name
     );
-    // Group & Deduplicate by localTrackId or plateNumber so each unique vehicle has exactly 1 card
-    const uniqueMap = new Map<string, DetectedVehicleItem>();
+    // Group & Deduplicate so each unique vehicle has exactly 1 card
+    const uniqueList: DetectedVehicleItem[] = [];
     for (const d of matched) {
-      const key = d.localTrackId || (d.plateNumber && d.plateNumber !== '—' ? d.plateNumber : d.id);
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, d);
-      } else {
-        const existing = uniqueMap.get(key)!;
-        const hasPlate = d.plateNumber && d.plateNumber !== '—' && !d.plateNumber.includes('?');
-        const existingHasPlate = existing.plateNumber && existing.plateNumber !== '—' && !existing.plateNumber.includes('?');
-        uniqueMap.set(key, {
-          ...existing,
+      const rawPlate = (d.plateNumber || '').toString();
+      const isClean = rawPlate && !rawPlate.startsWith('UNREADABLE') && !rawPlate.startsWith('TRACK_') && !rawPlate.startsWith('CAM_') && !rawPlate.startsWith('NO_PLATE') && rawPlate !== '—';
+      const cleanPlate = isClean ? rawPlate : '';
+      const dTime = d.timestampMs || (d.detectedAt ? new Date(d.detectedAt).getTime() : 0);
+
+      // Match against existing listed vehicles for this camera
+      const existingIdx = uniqueList.findIndex((ex) => {
+        if (d.localTrackId && ex.localTrackId && d.localTrackId === ex.localTrackId) return true;
+        if (cleanPlate && ex.plateNumber && ex.plateNumber === cleanPlate) return true;
+        if (cleanPlate && ex.plateNumber && ex.plateNumber !== '—') {
+          const p1 = cleanPlate.replace(/[^A-Z0-9]/g, '');
+          const p2 = ex.plateNumber.replace(/[^A-Z0-9]/g, '');
+          if (p1.length >= 4 && p2.length >= 4 && p1.slice(-4) === p2.slice(-4)) return true;
+        }
+        const exTime = ex.timestampMs || (ex.detectedAt ? new Date(ex.detectedAt).getTime() : 0);
+        const timeDiff = Math.abs(dTime - exTime);
+        if (d.vehicleType === ex.vehicleType && timeDiff < 20000) {
+          return true;
+        }
+        return false;
+      });
+
+      if (existingIdx === -1) {
+        uniqueList.push({
           ...d,
-          plateNumber: hasPlate ? d.plateNumber : existingHasPlate ? existing.plateNumber : '—',
-          confidence: Math.max(existing.confidence || 0, d.confidence || 0),
-          inFrame: d.inFrame !== undefined ? d.inFrame : existing.inFrame,
-          detectedAt: d.detectedAt || existing.detectedAt,
+          plateNumber: cleanPlate || '—',
         });
+      } else {
+        const ex = uniqueList[existingIdx];
+        const bestPlate = cleanPlate || (ex.plateNumber !== '—' ? ex.plateNumber : '—');
+        uniqueList[existingIdx] = {
+          ...ex,
+          ...d,
+          plateNumber: bestPlate,
+          confidence: Math.max(ex.confidence || 0, d.confidence || 0),
+          inFrame: d.inFrame !== undefined ? d.inFrame : ex.inFrame,
+          detectedAt: d.detectedAt || ex.detectedAt,
+        };
       }
     }
-    return Array.from(uniqueMap.values());
+    return uniqueList;
   }, [camera, sessionDetections]);
 
   const filteredDetections = React.useMemo(() => {
