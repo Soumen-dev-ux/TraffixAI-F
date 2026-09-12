@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
+import { CameraApi, AvailableVideo } from '../../data/api/CameraApi';
 
 type Props = {
   camera: Camera | null;
@@ -30,14 +31,6 @@ type Props = {
   ) => Promise<void>;
   onDeleteCamera?: (cameraId: string) => Promise<void>;
 };
-
-const VIDEO_PRESETS = [
-  { label: 'Feed 1: gettyimages-1191315794-640_adpp.mp4 (New Camera Footage 1)', path: '/videos/gettyimages-1191315794-640_adpp.mp4' },
-  { label: 'Feed 2: gettyimages-465302231-640_adpp.mp4 (New Camera Footage 2)', path: '/videos/gettyimages-465302231-640_adpp.mp4' },
-  { label: 'Feed 3: junction_traffic.mp4 (High-Density Junction)', path: '/videos/junction_traffic.mp4' },
-  { label: 'Feed 4: sample_traffic.mp4 (Kolkata Urban)', path: '/videos/sample_traffic.mp4' },
-  { label: 'Feed 5: 215258_medium.mp4 (Multi-Camera Re-ID Highway)', path: '/videos/215258_medium.mp4' },
-];
 
 const DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound', '360° Pan'];
 
@@ -57,8 +50,19 @@ export const EditCameraModal: React.FC<Props> = ({
   const [streamUrl, setStreamUrl] = useState('');
   const [isCustomUrl, setIsCustomUrl] = useState(false);
   const [customStreamUrl, setCustomStreamUrl] = useState('');
+  const [availableVideos, setAvailableVideos] = useState<AvailableVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      CameraApi.getAvailableVideos().then((vids) => {
+        if (vids && vids.length > 0) {
+          setAvailableVideos(vids);
+        }
+      });
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (camera) {
@@ -67,9 +71,9 @@ export const EditCameraModal: React.FC<Props> = ({
       setLongitude(camera.longitude?.toString() || '88.3525');
       setDirection(camera.direction || 'Northbound');
       
-      const currentUrl = camera.stream_url || '/videos/sample_traffic.mp4';
-      const isKnownPreset = VIDEO_PRESETS.some((p) => p.path === currentUrl);
-      if (isKnownPreset) {
+      const currentUrl = camera.stream_url || (camera as any).streamUrl || '/videos/sample_traffic.mp4';
+      const isKnownPreset = availableVideos.some((p) => p.path === currentUrl || p.id === currentUrl);
+      if (isKnownPreset || currentUrl.startsWith('/videos/')) {
         setStreamUrl(currentUrl);
         setIsCustomUrl(false);
         setCustomStreamUrl('');
@@ -80,7 +84,7 @@ export const EditCameraModal: React.FC<Props> = ({
       }
       setError('');
     }
-  }, [camera, visible]);
+  }, [camera, visible, availableVideos]);
 
   if (!camera) return null;
 
@@ -231,11 +235,11 @@ export const EditCameraModal: React.FC<Props> = ({
 
             {/* Video Footage Selection */}
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>ASSIGN VIDEO SOURCE / STREAM</Text>
-            {VIDEO_PRESETS.map((vp) => {
-              const isSelected = !isCustomUrl && streamUrl === vp.path;
+            {availableVideos.map((vp, index) => {
+              const isSelected = !isCustomUrl && (streamUrl === vp.path || streamUrl === vp.id || streamUrl.endsWith(vp.filename));
               return (
                 <TouchableOpacity
-                  key={vp.path}
+                  key={vp.path || vp.id || index}
                   style={[
                     styles.videoOption,
                     {
@@ -254,7 +258,16 @@ export const EditCameraModal: React.FC<Props> = ({
                     color={isSelected ? colors.accent : colors.textMuted}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={[styles.videoOptionText, { color: colors.text }]}>{vp.label}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.videoOptionText, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                      Feed {index + 1}: {vp.filename}
+                    </Text>
+                    {vp.sizeFormatted && (
+                      <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8 }}>
+                        {vp.sizeFormatted}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}

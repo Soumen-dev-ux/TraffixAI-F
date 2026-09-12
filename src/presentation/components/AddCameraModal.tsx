@@ -13,6 +13,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
+import { CameraApi, AvailableVideo } from '../../data/api/CameraApi';
 
 type Props = {
   visible: boolean;
@@ -37,14 +38,6 @@ const KOLKATA_PRESETS = [
 
 const DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound', '360° Pan'];
 
-const VIDEO_PRESETS = [
-  { label: 'Feed 1: gettyimages-1191315794-640_adpp.mp4 (New Camera Footage 1)', path: '/videos/gettyimages-1191315794-640_adpp.mp4' },
-  { label: 'Feed 2: gettyimages-465302231-640_adpp.mp4 (New Camera Footage 2)', path: '/videos/gettyimages-465302231-640_adpp.mp4' },
-  { label: 'Feed 3: junction_traffic.mp4 (High-Density Junction)', path: '/videos/junction_traffic.mp4' },
-  { label: 'Feed 4: sample_traffic.mp4 (Kolkata Urban)', path: '/videos/sample_traffic.mp4' },
-  { label: 'Feed 5: 215258_medium.mp4 (Multi-Camera Re-ID Highway)', path: '/videos/215258_medium.mp4' },
-];
-
 export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera }) => {
   const { colors } = useTheme();
 
@@ -52,11 +45,25 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
   const [latitude, setLatitude] = useState('22.5769');
   const [longitude, setLongitude] = useState('88.4331');
   const [direction, setDirection] = useState('Eastbound');
-  const [streamUrl, setStreamUrl] = useState('/videos/gettyimages-1191315794-640_adpp.mp4');
+  const [streamUrl, setStreamUrl] = useState('/videos/sample_traffic.mp4');
   const [isCustomUrl, setIsCustomUrl] = useState(false);
   const [customStreamUrl, setCustomStreamUrl] = useState('');
+  const [availableVideos, setAvailableVideos] = useState<AvailableVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (visible) {
+      CameraApi.getAvailableVideos().then((vids) => {
+        if (vids && vids.length > 0) {
+          setAvailableVideos(vids);
+          if (!streamUrl) {
+            setStreamUrl(vids[0].path);
+          }
+        }
+      });
+    }
+  }, [visible]);
 
   const handleSelectPreset = (preset: typeof KOLKATA_PRESETS[0]) => {
     setName(preset.name);
@@ -239,11 +246,11 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
 
             {/* Video Footage Selection */}
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>ASSIGNED VIDEO FOOTAGE</Text>
-            {VIDEO_PRESETS.map((vp) => {
-              const isSelected = !isCustomUrl && streamUrl === vp.path;
+            {availableVideos.map((vp, index) => {
+              const isSelected = !isCustomUrl && (streamUrl === vp.path || streamUrl === vp.id || streamUrl.endsWith(vp.filename));
               return (
                 <TouchableOpacity
-                  key={vp.path}
+                  key={vp.path || vp.id || index}
                   style={[
                     styles.videoOption,
                     {
@@ -262,7 +269,16 @@ export const AddCameraModal: React.FC<Props> = ({ visible, onClose, onAddCamera 
                     color={isSelected ? colors.accent : colors.textMuted}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={[styles.videoOptionText, { color: colors.text }]}>{vp.label}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.videoOptionText, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                      Feed {index + 1}: {vp.filename}
+                    </Text>
+                    {vp.sizeFormatted && (
+                      <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8 }}>
+                        {vp.sizeFormatted}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}
