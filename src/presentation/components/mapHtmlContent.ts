@@ -648,201 +648,206 @@ export function getMapHtmlContent(): string {
       var vType = (type || 'car').toLowerCase();
       var cName = (colorName || 'Silver').toLowerCase();
 
-      var primaryColor = '#38bdf8';
-      var secondaryColor = '#0284c7';
-      var roofColor = '#0369a1';
-      var highlightColor = '#e0f2fe';
+      var bodyPrimary = '#475569';
+      var bodySecondary = '#334155';
+      var bodyDark = '#1e293b';
+      var bodyHighlight = '#94a3b8';
+      var roofGlass = '#0284c7';
 
       if (cName.includes('yellow') || vType === 'taxi') {
-        primaryColor = '#eab308';
-        secondaryColor = '#ca8a04';
-        roofColor = '#a16207';
-        highlightColor = '#fef08a';
+        bodyPrimary = '#eab308';
+        bodySecondary = '#ca8a04';
+        bodyDark = '#854d0e';
+        bodyHighlight = '#fef08a';
       } else if (cName.includes('red')) {
-        primaryColor = '#ef4444';
-        secondaryColor = '#dc2626';
-        roofColor = '#b91c1c';
-        highlightColor = '#fecaca';
+        bodyPrimary = '#ef4444';
+        bodySecondary = '#dc2626';
+        bodyDark = '#991b1b';
+        bodyHighlight = '#fca5a5';
       } else if (cName.includes('white') || cName.includes('silver') || cName.includes('grey') || cName.includes('gray')) {
-        primaryColor = '#e2e8f0';
-        secondaryColor = '#94a3b8';
-        roofColor = '#64748b';
-        highlightColor = '#ffffff';
+        bodyPrimary = '#cbd5e1';
+        bodySecondary = '#94a3b8';
+        bodyDark = '#64748b';
+        bodyHighlight = '#f8fafc';
       } else if (cName.includes('black') || cName.includes('dark')) {
-        primaryColor = '#334155';
-        secondaryColor = '#1e293b';
-        roofColor = '#0f172a';
-        highlightColor = '#64748b';
+        bodyPrimary = '#1e293b';
+        bodySecondary = '#0f172a';
+        bodyDark = '#020617';
+        bodyHighlight = '#475569';
+      } else if (cName.includes('blue')) {
+        bodyPrimary = '#3b82f6';
+        bodySecondary = '#2563eb';
+        bodyDark = '#1d4ed8';
+        bodyHighlight = '#93c5fd';
       } else if (cName.includes('green')) {
-        primaryColor = '#22c55e';
-        secondaryColor = '#16a34a';
-        roofColor = '#15803d';
-        highlightColor = '#bbf7d0';
+        bodyPrimary = '#22c55e';
+        bodySecondary = '#16a34a';
+        bodyDark = '#15803d';
+        bodyHighlight = '#86efac';
       }
 
       // 1. 3D TRUCK
       if (vType === 'truck') {
-        return '<svg width="68" height="68" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+        return '<svg width="78" height="110" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
           '<defs>' +
-            '<filter id="v-shadow-truck" x="-30%" y="-30%" width="160%" height="160%">' +
-              '<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>' +
-              '<feOffset dx="2" dy="5"/>' +
-              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
-              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
-            '</filter>' +
-            '<linearGradient id="truck-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
-              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
-              '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
+            '<linearGradient id="nav-arrow-glow" x1="0%" y1="0%" x2="0%" y2="100%">' +
+              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="1"/>' +
+              '<stop offset="100%" stop-color="#0284c7" stop-opacity="0.8"/>' +
             '</linearGradient>' +
           '</defs>' +
-          '<ellipse cx="50" cy="62" rx="34" ry="18" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
-          '<polygon points="28,68 8,85 30,95 44,76" fill="url(#truck-beam)" />' +
-          '<polygon points="56,76 46,95 68,85 48,68" fill="url(#truck-beam)" />' +
-          '<ellipse cx="50" cy="62" rx="26" ry="12" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-truck)" />' +
-          '<g filter="url(#v-shadow-truck)">' +
-            '<polygon points="32,28 66,12 66,42 32,58" fill="' + secondaryColor + '" />' +
-            '<polygon points="32,28 66,12 80,18 46,35" fill="' + primaryColor + '" />' +
-            '<polygon points="66,12 80,18 80,48 66,42" fill="' + roofColor + '" />' +
-            '<line x1="43" y1="23" x2="43" y2="52" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
-            '<line x1="54" y1="18" x2="54" y2="47" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
-            '<polygon points="18,48 36,39 46,44 28,54" fill="' + highlightColor + '" />' +
-            '<polygon points="18,48 28,54 28,70 18,63" fill="' + primaryColor + '" />' +
-            '<polygon points="28,54 46,44 46,60 28,70" fill="' + secondaryColor + '" />' +
-            '<polygon points="20,49 34,42 42,46 28,53" fill="#0f172a" opacity="0.85" />' +
-            '<polygon points="22,50 32,45 36,47 26,52" fill="#38bdf8" opacity="0.6" />' +
-            '<circle cx="20" cy="62" r="2.5" fill="#fef08a" />' +
-            '<circle cx="27" cy="67" r="2.5" fill="#fef08a" />' +
-            '<ellipse cx="22" cy="69" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-            '<ellipse cx="40" cy="63" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-            '<ellipse cx="72" cy="46" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-          '</g>' +
+          '<!-- Navigation Direction Arrow on Road -->' +
+          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#0284c7" stroke-width="2.5" />' +
+          '<!-- Asphalt Shadow -->' +
+          '<ellipse cx="50" cy="88" rx="26" ry="46" fill="rgba(0,0,0,0.6)" />' +
+          '<!-- Tandem Wheels -->' +
+          '<rect x="22" y="48" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="72" y="48" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="22" y="104" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="72" y="104" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="22" y="120" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="72" y="120" width="6" height="15" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<!-- Cargo Trailer Box -->' +
+          '<rect x="26" y="62" width="48" height="74" rx="4" fill="' + bodySecondary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
+          '<rect x="29" y="65" width="42" height="68" rx="2" fill="' + bodyPrimary + '" />' +
+          '<line x1="26" y1="84" x2="74" y2="84" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
+          '<line x1="26" y1="106" x2="74" y2="106" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
+          '<!-- Front Driver Cabin -->' +
+          '<path d="M28,62 L28,45 C28,40 34,36 50,36 C66,36 72,40 72,45 L72,62 Z" fill="' + bodyHighlight + '" />' +
+          '<path d="M30,46 L70,46 L68,54 L32,54 Z" fill="#0f172a" />' +
+          '<path d="M32,48 L68,48 L66,52 L34,52 Z" fill="' + roofGlass + '" opacity="0.85" />' +
+          '<circle cx="34" cy="38" r="3" fill="#fef08a" />' +
+          '<circle cx="66" cy="38" r="3" fill="#fef08a" />' +
+          '<rect x="23" y="47" width="5" height="3" rx="1.5" fill="' + bodyDark + '" />' +
+          '<rect x="72" y="47" width="5" height="3" rx="1.5" fill="' + bodyDark + '" />' +
         '</svg>';
       }
 
       // 2. 3D BUS
       if (vType === 'bus') {
-        return '<svg width="68" height="68" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
-          '<defs>' +
-            '<filter id="v-shadow-bus" x="-30%" y="-30%" width="160%" height="160%">' +
-              '<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>' +
-              '<feOffset dx="2" dy="5"/>' +
-              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
-              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
-            '</filter>' +
-            '<linearGradient id="bus-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
-              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
-              '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
-            '</linearGradient>' +
-          '</defs>' +
-          '<ellipse cx="50" cy="62" rx="34" ry="18" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
-          '<polygon points="20,66 2,82 24,96 36,73" fill="url(#bus-beam)" />' +
-          '<ellipse cx="50" cy="62" rx="28" ry="12" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-bus)" />' +
-          '<g filter="url(#v-shadow-bus)">' +
-            '<polygon points="20,32 68,10 82,16 34,39" fill="' + highlightColor + '" />' +
-            '<polygon points="20,32 34,39 34,65 20,57" fill="' + primaryColor + '" />' +
-            '<polygon points="34,39 82,16 82,42 34,65" fill="' + secondaryColor + '" />' +
-            '<polygon points="40,22 60,13 65,15 45,24" fill="#64748b" />' +
-            '<polygon points="21,34 33,40 33,52 21,46" fill="#0f172a" />' +
-            '<polygon points="22,36 31,41 31,50 22,45" fill="#38bdf8" opacity="0.75" />' +
-            '<polygon points="37,40 78,21 78,32 37,51" fill="#0f172a" />' +
-            '<polygon points="39,41 76,23 76,30 39,49" fill="#0284c7" opacity="0.8" />' +
-            '<circle cx="22" cy="54" r="2.2" fill="#fef08a" />' +
-            '<circle cx="30" cy="59" r="2.2" fill="#fef08a" />' +
-            '<ellipse cx="26" cy="62" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-            '<ellipse cx="68" cy="42" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-          '</g>' +
+        return '<svg width="78" height="110" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
+          '<!-- Navigation Direction Arrow -->' +
+          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#16a34a" stroke-width="2.5" />' +
+          '<!-- Shadow -->' +
+          '<ellipse cx="50" cy="86" rx="26" ry="46" fill="rgba(0,0,0,0.6)" />' +
+          '<!-- Bus Aerodynamic Body -->' +
+          '<rect x="25" y="40" width="50" height="94" rx="10" fill="' + bodySecondary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
+          '<rect x="27" y="42" width="46" height="90" rx="8" fill="' + bodyPrimary + '" />' +
+          '<!-- Front Panoramic Windshield -->' +
+          '<path d="M30,44 C36,40 64,40 70,44 L68,55 L32,55 Z" fill="#0f172a" />' +
+          '<path d="M32,46 C38,43 62,43 68,46 L66,53 L34,53 Z" fill="' + roofGlass + '" opacity="0.85" />' +
+          '<!-- Passenger Side Windows Strip -->' +
+          '<rect x="28" y="58" width="8" height="70" rx="2" fill="#0f172a" />' +
+          '<rect x="64" y="58" width="8" height="70" rx="2" fill="#0f172a" />' +
+          '<!-- Roof AC & Vents -->' +
+          '<rect x="42" y="66" width="16" height="36" rx="3" fill="#64748b" />' +
+          '<!-- Headlights -->' +
+          '<circle cx="32" cy="42" r="3" fill="#fef08a" />' +
+          '<circle cx="68" cy="42" r="3" fill="#fef08a" />' +
         '</svg>';
       }
 
       // 3. 3D MOTORCYCLE / BIKE
       if (vType === 'motorcycle' || vType === 'bike' || vType === 'motorbike') {
-        return '<svg width="58" height="58" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
-          '<defs>' +
-            '<filter id="v-shadow-bike" x="-30%" y="-30%" width="160%" height="160%">' +
-              '<feGaussianBlur in="SourceAlpha" stdDeviation="2"/>' +
-              '<feOffset dx="1" dy="4"/>' +
-              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
-              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
-            '</filter>' +
-          '</defs>' +
-          '<ellipse cx="50" cy="64" rx="26" ry="14" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8" class="radar-pulse" />' +
-          '<ellipse cx="50" cy="64" rx="18" ry="8" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-bike)" />' +
-          '<g filter="url(#v-shadow-bike)">' +
-            '<ellipse cx="64" cy="50" rx="4" ry="10" fill="#0f172a" stroke="#475569" stroke-width="1.5" />' +
-            '<ellipse cx="32" cy="65" rx="4" ry="10" fill="#0f172a" stroke="#475569" stroke-width="1.5" />' +
-            '<polygon points="34,60 52,42 62,48 44,66" fill="' + secondaryColor + '" />' +
-            '<polygon points="38,48 48,38 56,42 46,52" fill="' + primaryColor + '" />' +
-            '<circle cx="48" cy="28" r="7" fill="#0f172a" stroke="' + primaryColor + '" stroke-width="1" />' +
-            '<path d="M42,35 C42,32 54,32 54,35 L58,46 L40,46 Z" fill="#1e293b" />' +
-            '<line x1="30" y1="48" x2="38" y2="44" stroke="#e2e8f0" stroke-width="2" />' +
-            '<circle cx="28" cy="58" r="3" fill="#fef08a" />' +
-          '</g>' +
+        return '<svg width="68" height="96" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
+          '<!-- Navigation Direction Arrow -->' +
+          '<polygon points="50,4 40,22 46,20 46,32 54,32 54,20 60,22" fill="#ffffff" stroke="#f59e0b" stroke-width="2.5" />' +
+          '<!-- Shadow -->' +
+          '<ellipse cx="50" cy="85" rx="16" ry="32" fill="rgba(0,0,0,0.6)" />' +
+          '<!-- Front & Rear Wheels -->' +
+          '<rect x="47" y="36" width="6" height="22" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="1.5" />' +
+          '<rect x="47" y="98" width="6" height="26" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="1.5" />' +
+          '<!-- Chassis Body & Tank -->' +
+          '<path d="M44,56 L56,56 L58,86 L42,86 Z" fill="' + bodyPrimary + '" />' +
+          '<!-- Handlebars -->' +
+          '<line x1="30" y1="52" x2="70" y2="52" stroke="#e2e8f0" stroke-width="3.5" stroke-linecap="round" />' +
+          '<circle cx="29" cy="52" r="2.5" fill="#0f172a" />' +
+          '<circle cx="71" cy="52" r="2.5" fill="#0f172a" />' +
+          '<!-- Rider Helmet & Shoulders -->' +
+          '<ellipse cx="50" cy="74" rx="9" ry="11" fill="#0f172a" stroke="' + bodyHighlight + '" stroke-width="1.5" />' +
+          '<ellipse cx="50" cy="70" rx="6" ry="3" fill="#38bdf8" />' +
+          '<circle cx="50" cy="40" r="3.5" fill="#fef08a" />' +
         '</svg>';
       }
 
       // 4. 3D VAN
       if (vType === 'van') {
-        return '<svg width="64" height="64" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
-          '<defs>' +
-            '<filter id="v-shadow-van" x="-30%" y="-30%" width="160%" height="160%">' +
-              '<feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>' +
-              '<feOffset dx="2" dy="4"/>' +
-              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
-              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
-            '</filter>' +
-          '</defs>' +
-          '<ellipse cx="50" cy="62" rx="30" ry="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
-          '<ellipse cx="50" cy="62" rx="24" ry="11" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-van)" />' +
-          '<g filter="url(#v-shadow-van)">' +
-            '<polygon points="24,36 64,16 76,22 36,44" fill="' + highlightColor + '" />' +
-            '<polygon points="24,36 36,44 36,66 24,58" fill="' + primaryColor + '" />' +
-            '<polygon points="36,44 76,22 76,44 36,66" fill="' + secondaryColor + '" />' +
-            '<polygon points="20,48 24,36 36,44 32,56" fill="' + primaryColor + '" />' +
-            '<polygon points="22,46 25,38 34,44 31,52" fill="#0f172a" />' +
-            '<polygon points="23,46 25,40 32,45 30,50" fill="#38bdf8" opacity="0.75" />' +
-            '<line x1="52" y1="35" x2="52" y2="57" stroke="rgba(0,0,0,0.3)" stroke-width="1" />' +
-            '<circle cx="21" cy="54" r="2.2" fill="#fef08a" />' +
-            '<circle cx="28" cy="59" r="2.2" fill="#fef08a" />' +
-            '<ellipse cx="28" cy="63" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-            '<ellipse cx="62" cy="46" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
-          '</g>' +
+        return '<svg width="76" height="106" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
+          '<!-- Navigation Direction Arrow -->' +
+          '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#0284c7" stroke-width="2.5" />' +
+          '<!-- Shadow -->' +
+          '<ellipse cx="50" cy="85" rx="26" ry="42" fill="rgba(0,0,0,0.6)" />' +
+          '<!-- Wheels -->' +
+          '<rect x="22" y="52" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="72" y="52" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="22" y="102" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<rect x="72" y="102" width="6" height="16" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1"/>' +
+          '<!-- Body -->' +
+          '<rect x="26" y="44" width="48" height="82" rx="8" fill="' + bodyPrimary + '" stroke="' + bodyDark + '" stroke-width="1.5" />' +
+          '<!-- Windshield -->' +
+          '<path d="M30,50 C36,46 64,46 70,50 L68,60 L32,60 Z" fill="#0f172a" />' +
+          '<path d="M32,52 C38,48 62,48 68,52 L66,58 L34,58 Z" fill="' + roofGlass + '" opacity="0.85" />' +
+          '<!-- Side Windows -->' +
+          '<rect x="28" y="64" width="5" height="18" rx="1.5" fill="#0f172a" />' +
+          '<rect x="67" y="64" width="5" height="18" rx="1.5" fill="#0f172a" />' +
+          '<circle cx="32" cy="46" r="3" fill="#fef08a" />' +
+          '<circle cx="68" cy="46" r="3" fill="#fef08a" />' +
         '</svg>';
       }
 
-      // 5. 3D CAR / SEDAN / TAXI (Default)
-      return '<svg width="64" height="64" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+      // 5. 3D SUV / SEDAN / CAR (Google Maps 3D Navigation Model)
+      return '<svg width="76" height="106" viewBox="0 0 100 140" class="vehicle-3d-svg">' +
         '<defs>' +
-          '<filter id="v-shadow-car" x="-30%" y="-30%" width="160%" height="160%">' +
-            '<feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>' +
-            '<feOffset dx="2" dy="5"/>' +
-            '<feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer>' +
-            '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
-          '</filter>' +
-          '<linearGradient id="headlight-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
-            '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
-            '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
+          '<linearGradient id="car-hood-grad" x1="0%" y1="0%" x2="0%" y2="100%">' +
+            '<stop offset="0%" stop-color="' + bodyHighlight + '"/>' +
+            '<stop offset="100%" stop-color="' + bodyPrimary + '"/>' +
+          '</linearGradient>' +
+          '<linearGradient id="windshield-glare" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>' +
+            '<stop offset="70%" stop-color="#0284c7" stop-opacity="0.85"/>' +
+            '<stop offset="100%" stop-color="#0f172a" stop-opacity="0.95"/>' +
           '</linearGradient>' +
         '</defs>' +
-        '<ellipse cx="50" cy="62" rx="30" ry="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.85" class="radar-pulse" />' +
-        '<polygon points="22,66 2,82 22,96 34,74" fill="url(#headlight-beam)" />' +
-        '<ellipse cx="50" cy="62" rx="24" ry="11" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-car)" />' +
-        '<g filter="url(#v-shadow-car)">' +
-          '<polygon points="18,52 38,42 78,22 84,26 44,66 24,58" fill="' + secondaryColor + '" />' +
-          '<polygon points="18,52 24,58 24,66 18,60" fill="' + roofColor + '" />' +
-          '<polygon points="24,58 44,66 44,74 24,66" fill="' + secondaryColor + '" />' +
-          '<polygon points="44,66 84,26 84,34 44,74" fill="' + roofColor + '" />' +
-          '<polygon points="34,36 50,28 66,20 50,48" fill="' + highlightColor + '" />' +
-          '<polygon points="28,46 36,37 48,43 40,52" fill="#0f172a" />' +
-          '<polygon points="30,46 36,39 46,44 40,50" fill="#38bdf8" opacity="0.85" />' +
-          '<polygon points="42,50 49,43 64,22 57,29" fill="#0f172a" />' +
-          '<polygon points="44,49 49,44 62,24 57,29" fill="#0284c7" opacity="0.8" />' +
-          '<polygon points="18,52 30,46 42,52 30,58" fill="' + primaryColor + '" />' +
-          '<circle cx="22" cy="56" r="2.5" fill="#fef08a" />' +
-          '<circle cx="32" cy="62" r="2.5" fill="#fef08a" />' +
-          '<polygon points="23,59 31,64 30,66 22,61" fill="#090d16" />' +
-          '<ellipse cx="26" cy="65" rx="3.5" ry="7" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-          '<ellipse cx="64" cy="46" rx="3.5" ry="7" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
-        '</g>' +
+        '<!-- Navigation Forward Arrow (Google Maps Style) -->' +
+        '<polygon points="50,2 38,24 45,22 45,36 55,36 55,22 62,24" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" />' +
+        '<!-- Ambient Ground Halo -->' +
+        '<ellipse cx="50" cy="85" rx="30" ry="38" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4 4" class="radar-pulse" />' +
+        '<!-- Ground Asphalt Shadow -->' +
+        '<ellipse cx="50" cy="86" rx="25" ry="36" fill="rgba(0,0,0,0.65)" />' +
+        '<!-- 4 3D Rubber Wheels with Silver Rims -->' +
+        '<rect x="20" y="52" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+        '<rect x="22" y="56" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
+        '<rect x="73" y="52" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+        '<rect x="75" y="56" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
+        '<rect x="20" y="98" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+        '<rect x="22" y="102" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
+        '<rect x="73" y="98" width="7" height="16" rx="3.5" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+        '<rect x="75" y="102" width="3" height="8" rx="1.5" fill="#94a3b8" />' +
+        '<!-- 3D Car Body Chassis -->' +
+        '<path d="M26,52 C26,44 34,40 50,40 C66,40 74,44 74,52 L74,116 C74,122 66,126 50,126 C34,126 26,122 26,116 Z" fill="url(#car-hood-grad)" stroke="' + bodyDark + '" stroke-width="1.5" />' +
+        '<!-- Hood Character Lines -->' +
+        '<line x1="38" y1="42" x2="40" y2="58" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />' +
+        '<line x1="62" y1="42" x2="60" y2="58" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />' +
+        '<!-- Front Windshield -->' +
+        '<path d="M32,60 C38,56 62,56 68,60 L65,74 L35,74 Z" fill="#0f172a" />' +
+        '<path d="M34,62 C40,58 60,58 66,62 L64,72 L36,72 Z" fill="url(#windshield-glare)" />' +
+        '<!-- Roof Panel & Rails -->' +
+        '<rect x="34" y="74" width="32" height="28" rx="3" fill="' + bodySecondary + '" />' +
+        '<line x1="34" y1="76" x2="34" y2="100" stroke="#334155" stroke-width="2" stroke-linecap="round" />' +
+        '<line x1="66" y1="76" x2="66" y2="100" stroke="#334155" stroke-width="2" stroke-linecap="round" />' +
+        '<!-- Rear Windshield Glass -->' +
+        '<path d="M34,103 L66,103 L68,113 L32,113 Z" fill="#0f172a" />' +
+        '<path d="M36,104 L64,104 L66,111 L34,111 Z" fill="' + roofGlass + '" opacity="0.75" />' +
+        '<!-- Side Mirrors -->' +
+        '<rect x="18" y="58" width="8" height="4" rx="2" fill="' + bodyDark + '" />' +
+        '<rect x="74" y="58" width="8" height="4" rx="2" fill="' + bodyDark + '" />' +
+        '<!-- Headlights (Twin Glowing Xenon) -->' +
+        '<circle cx="32" cy="44" r="3.2" fill="#fef08a" />' +
+        '<circle cx="32" cy="44" r="1.5" fill="#ffffff" />' +
+        '<circle cx="68" cy="44" r="3.2" fill="#fef08a" />' +
+        '<circle cx="68" cy="44" r="1.5" fill="#ffffff" />' +
+        '<!-- Taillights (Red LED Bar) -->' +
+        '<rect x="29" y="122" width="10" height="3" rx="1.5" fill="#ef4444" />' +
+        '<rect x="61" y="122" width="10" height="3" rx="1.5" fill="#ef4444" />' +
       '</svg>';
     }
 
@@ -1045,7 +1050,33 @@ export function getMapHtmlContent(): string {
         var vpopup = new maplibregl.Popup({ offset: 28 })
           .setHTML('<strong style="color:#38bdf8; font-size:13px;">' + (vehicle.plateNumber || 'TARGET') + '</strong><br/><span style="color:#f1f5f9; font-weight:600;">' + (vehicle.color || '') + ' ' + (vType.toUpperCase()) + '</span><br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Tracking') + '</span>');
 
-        vehicleMarker = new maplibregl.Marker({ element: vel, anchor: 'center' })
+        var heading = 0;
+        if (typeof vehicle.heading === 'number') {
+          heading = vehicle.heading;
+        } else if (trajectory && trajectory.detections && trajectory.detections.length >= 2) {
+          var pts = trajectory.detections;
+          var lastPt = pts[pts.length - 1];
+          var prevPt = pts[pts.length - 2];
+          var lat1 = Number(prevPt.latitude);
+          var lng1 = Number(prevPt.longitude);
+          var lat2 = Number(lastPt.latitude);
+          var lng2 = Number(lastPt.longitude);
+          if (!isNaN(lat1) && !isNaN(lng1) && !isNaN(lat2) && !isNaN(lng2)) {
+            var dLat = lat2 - lat1;
+            var dLng = (lng2 - lng1) * Math.cos(lat2 * Math.PI / 180);
+            if (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001) {
+              heading = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+            }
+          }
+        }
+
+        vehicleMarker = new maplibregl.Marker({
+          element: vel,
+          anchor: 'center',
+          rotationAlignment: 'map',
+          pitchAlignment: 'map',
+          rotation: heading
+        })
           .setLngLat([vehicle.longitude, vehicle.latitude])
           .setPopup(vpopup)
           .addTo(map);
