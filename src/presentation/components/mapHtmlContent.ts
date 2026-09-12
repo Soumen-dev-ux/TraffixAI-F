@@ -226,8 +226,55 @@ export function getMapHtmlContent(): string {
   </div>
   <script>
     var activeLineCoords = [];
-    var routeCache = {};
+    var routeCache = {
+      // Park Street <-> Esplanade (Chowringhee / JL Nehru Rd)
+      "88.35250,22.55350;88.35120,22.56460": [
+        [88.3525, 22.5535], [88.3522, 22.5558], [88.3519, 22.5582], [88.3516, 22.5610], [88.3514, 22.5630], [88.3512, 22.5646]
+      ],
+      "88.35120,22.56460;88.35250,22.55350": [
+        [88.3512, 22.5646], [88.3514, 22.5630], [88.3516, 22.5610], [88.3519, 22.5582], [88.3522, 22.5558], [88.3525, 22.5535]
+      ],
+      // Esplanade <-> Howrah Bridge (CR Ave / Brabourne / Strand Rd)
+      "88.35120,22.56460;88.34760,22.59580": [
+        [88.3512, 22.5646], [88.3508, 22.5680], [88.3502, 22.5725], [88.3490, 22.5780], [88.3476, 22.5855], [88.3468, 22.5910], [88.3476, 22.5958]
+      ],
+      "88.34760,22.59580;88.35120,22.56460": [
+        [88.3476, 22.5958], [88.3468, 22.5910], [88.3476, 22.5855], [88.3490, 22.5780], [88.3502, 22.5725], [88.3508, 22.5680], [88.3512, 22.5646]
+      ],
+      // Park Street <-> Gariahat (Sarat Bose / Gariahat Rd)
+      "88.35250,22.55350;88.36540,22.51860": [
+        [88.3525, 22.5535], [88.3538, 22.5480], [88.3560, 22.5410], [88.3585, 22.5340], [88.3615, 22.5270], [88.3654, 22.5186]
+      ],
+      "88.36540,22.51860;88.35250,22.55350": [
+        [88.3654, 22.5186], [88.3615, 22.5270], [88.3585, 22.5340], [88.3560, 22.5410], [88.3538, 22.5480], [88.3525, 22.5535]
+      ],
+      // Esplanade <-> Salt Lake Sector V (Maniktala / EM Bypass)
+      "88.35120,22.56460;88.43310,22.57690": [
+        [88.3512, 22.5646], [88.3580, 22.5665], [88.3720, 22.5685], [88.3900, 22.5710], [88.4100, 22.5740], [88.4331, 22.5769]
+      ],
+      "88.43310,22.57690;88.35120,22.56460": [
+        [88.4331, 22.5769], [88.4100, 22.5740], [88.3900, 22.5710], [88.3720, 22.5685], [88.3580, 22.5665], [88.3512, 22.5646]
+      ]
+    };
     var currentActiveCacheKey = '';
+
+    function lookupPrecachedSegment(p1, p2) {
+      var key = p1[0].toFixed(5) + ',' + p1[1].toFixed(5) + ';' + p2[0].toFixed(5) + ',' + p2[1].toFixed(5);
+      if (routeCache[key]) return routeCache[key];
+      // Check nearest camera match within 300m
+      for (var k in routeCache) {
+        var parts = k.split(';');
+        if (parts.length === 2) {
+          var c1 = parts[0].split(','), c2 = parts[1].split(',');
+          var lng1 = parseFloat(c1[0]), lat1 = parseFloat(c1[1]);
+          var lng2 = parseFloat(c2[0]), lat2 = parseFloat(c2[1]);
+          if (Math.hypot(p1[0] - lng1, p1[1] - lat1) < 0.003 && Math.hypot(p2[0] - lng2, p2[1] - lat2) < 0.003) {
+            return routeCache[k];
+          }
+        }
+      }
+      return null;
+    }
 
     function perpDistSq(pt, l1, l2) {
       var dx = l2[0] - l1[0];
@@ -272,18 +319,20 @@ export function getMapHtmlContent(): string {
         }
       }
       if (clean.length < 2) return clean;
+
+      // Check if segments match pre-cached arterial roads
       if (clean.length === 2) {
+        var pre = lookupPrecachedSegment(clean[0], clean[1]);
+        if (pre && pre.length > 1) return pre;
+
+        // Realistic orthogonal street curve with mid-way turn
         var p1 = clean[0], p2 = clean[1];
-        var line = [];
-        var steps = 16;
-        for (var i = 0; i <= steps; i++) {
-          var t = i / steps;
-          line.push([
-            p1[0] + (p2[0] - p1[0]) * t,
-            p1[1] + (p2[1] - p1[1]) * t
-          ]);
-        }
-        return line;
+        var midLng = p1[0] + (p2[0] - p1[0]) * 0.55;
+        var midLat = p1[1] + (p2[1] - p1[1]) * 0.45;
+        var corner1 = [p1[0], midLat];
+        var corner2 = [midLng, p2[1]];
+        var multiPt = [p1, corner1, corner2, p2];
+        return rdpSimplify(multiPt, 0.000001);
       }
       var result = [];
       var pts = clean.slice();

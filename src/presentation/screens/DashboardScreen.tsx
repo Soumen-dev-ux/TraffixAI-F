@@ -178,34 +178,42 @@ export default function DashboardScreen() {
         const vType = d.vehicleType || d.vehicle_type || 'car';
 
         if (plate) {
-          // 1. Update camera vehicle count dynamically
-          setCameras((prevCams) =>
-            prevCams.map((cam) => {
-              if (cam.id === camId || cam.name === camName) {
-                const newCount = (cam.vehicleCount || 0) + 1;
-                return {
-                  ...cam,
-                  vehicleCount: newCount,
-                  trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
-                };
-              }
-              return cam;
-            })
-          );
-
-          // 2. Update analytics active vehicles dynamically
-          setAnalytics((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              totalVehicles: (prev.totalVehicles || 0) + 1,
-            };
-          });
-
-          // 3. Add to recent live detections list
           const nowMs = Date.now();
-          setLiveDetections((prev) => [
-            {
+          const trackId = (d.localTrackId || d.local_track_id || '').toString();
+
+          setLiveDetections((prev) => {
+            const isExisting = prev.some(
+              (p) => (trackId && p.localTrackId === trackId) ||
+                     (p.plateNumber && p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName))
+            );
+
+            // 1. Only increment counter for brand-new vehicle tracks (not on every frame!)
+            if (!isExisting) {
+              setCameras((prevCams) =>
+                prevCams.map((cam) => {
+                  if (cam.id === camId || cam.name === camName) {
+                    const newCount = (cam.vehicleCount || 0) + 1;
+                    return {
+                      ...cam,
+                      vehicleCount: newCount,
+                      trafficLevel: newCount > 30 ? 'critical' : newCount > 20 ? 'high' : newCount > 10 ? 'moderate' : 'low',
+                    };
+                  }
+                  return cam;
+                })
+              );
+
+              setAnalytics((prevAnalytics) => {
+                if (!prevAnalytics) return prevAnalytics;
+                return {
+                  ...prevAnalytics,
+                  totalVehicles: (prevAnalytics.totalVehicles || 0) + 1,
+                };
+              });
+            }
+
+            // 2. Upsert existing detection item or prepend new item
+            const newDet: DetectedVehicleItem = {
               id: event.id || String(nowMs),
               plateNumber: plate,
               cameraId: camId,
@@ -214,18 +222,23 @@ export default function DashboardScreen() {
               vehicleType: vType,
               confidence: d.confidence || d.vehicle_confidence || 0.92,
               boundingBox: d.boundingBox || d.bounding_box || null,
-              localTrackId: d.localTrackId || d.local_track_id || null,
+              localTrackId: trackId || null,
               inFrame: true,
               timestampMs: nowMs,
-            },
-            ...prev
-              .filter((p) => !(p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName)))
+            };
+
+            const otherItems = prev
+              .filter(
+                (p) => !((trackId && p.localTrackId === trackId) ||
+                         (p.plateNumber === plate && (p.cameraId === camId || p.cameraName === camName)))
+              )
               .map((p) => ({
                 ...p,
                 inFrame: nowMs - (p.timestampMs || 0) < 25000,
-              }))
-              .slice(0, 49),
-          ]);
+              }));
+
+            return [newDet, ...otherItems.slice(0, 48)];
+          });
 
           // 4. Check for Multi-Camera Re-ID Match
           const trajDets = d.trajectory?.detections;

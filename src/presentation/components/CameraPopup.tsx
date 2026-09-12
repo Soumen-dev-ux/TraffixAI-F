@@ -88,9 +88,30 @@ export const CameraPopup: React.FC<Props> = ({
 
   const cameraDetections = React.useMemo(() => {
     if (!camera || !sessionDetections) return [];
-    return sessionDetections.filter(
+    const matched = sessionDetections.filter(
       (d) => !d.cameraId || d.cameraId === camera.id || d.cameraName === camera.name
     );
+    // Group & Deduplicate by localTrackId or plateNumber so each unique vehicle has exactly 1 card
+    const uniqueMap = new Map<string, DetectedVehicleItem>();
+    for (const d of matched) {
+      const key = d.localTrackId || (d.plateNumber && d.plateNumber !== '—' ? d.plateNumber : d.id);
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, d);
+      } else {
+        const existing = uniqueMap.get(key)!;
+        const hasPlate = d.plateNumber && d.plateNumber !== '—' && !d.plateNumber.includes('?');
+        const existingHasPlate = existing.plateNumber && existing.plateNumber !== '—' && !existing.plateNumber.includes('?');
+        uniqueMap.set(key, {
+          ...existing,
+          ...d,
+          plateNumber: hasPlate ? d.plateNumber : existingHasPlate ? existing.plateNumber : '—',
+          confidence: Math.max(existing.confidence || 0, d.confidence || 0),
+          inFrame: d.inFrame !== undefined ? d.inFrame : existing.inFrame,
+          detectedAt: d.detectedAt || existing.detectedAt,
+        });
+      }
+    }
+    return Array.from(uniqueMap.values());
   }, [camera, sessionDetections]);
 
   const filteredDetections = React.useMemo(() => {
@@ -116,6 +137,7 @@ export const CameraPopup: React.FC<Props> = ({
     return false;
   };
 
+  // 1. Initial camera load setup
   React.useEffect(() => {
     if (!visible || !camera) {
       setIsVideoMenuOpen(false);
@@ -124,22 +146,9 @@ export const CameraPopup: React.FC<Props> = ({
     const currentPath = camera.streamUrl || camera.stream_url || '/videos/sample_traffic.mp4';
     setSelectedVideoPath(currentPath);
     setIsVideoMenuOpen(false);
-
-    // 1. Sync from global activeDetectingCameras prop
-    const isCurrentlyRunning = activeDetectingCameras.includes(camera.id);
-    setIsDetectionActive(isCurrentlyRunning);
-    setAiStreamActive(isCurrentlyRunning);
     setAiStreamError(false);
 
-    // 2. Also poll live daemon/backend detection status
-    CameraApi.getDetectionStatus().then((res) => {
-      if (Array.isArray(res.active_cameras) && res.active_cameras.includes(camera.id)) {
-        setIsDetectionActive(true);
-        setAiStreamActive(true);
-      }
-    }).catch(() => {});
-
-    // 3. Fetch dynamic available video clips from public/videos/
+    // Fetch dynamic available video clips from public/videos/
     CameraApi.getAvailableVideos().then((videos) => {
       if (Array.isArray(videos) && videos.length > 0) {
         setAvailableVideos(videos);
@@ -150,7 +159,18 @@ export const CameraPopup: React.FC<Props> = ({
       setCurrentTime(new Date().toLocaleTimeString());
     }, 1000);
     return () => clearInterval(interval);
-  }, [visible, camera?.id, activeDetectingCameras]);
+  }, [visible, camera?.id]);
+
+  // 2. Detection active status sync (does NOT close the video dropdown!)
+  React.useEffect(() => {
+    if (!visible || !camera) return;
+    const isCurrentlyRunning = activeDetectingCameras.includes(camera.id);
+    setIsDetectionActive(isCurrentlyRunning);
+    setAiStreamActive(isCurrentlyRunning);
+    if (!isCurrentlyRunning) {
+      setAiStreamError(false);
+    }
+  }, [activeDetectingCameras, camera?.id, visible]);
 
   if (!camera || !visible) return null;
 
@@ -299,16 +319,44 @@ export const CameraPopup: React.FC<Props> = ({
         <View style={[styles.feedContainer, { backgroundColor: '#000000', borderColor: colors.border }]}>
           {isOnline ? (
             Platform.OS === 'web' ? (
-              isDetectionActive ? (
-                React.createElement('img', {
+              React.createElement('div', {
+                style: {
+                  position: 'relative',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  backgroundColor: '#000000',
+                }
+              }, [
+                React.createElement('video', {
+                  key: `base_vid_${camera.id}_${selectedVideoPath}`,
+                  src: selectedVideoPath,
+                  autoPlay: true,
+                  loop: true,
+                  muted: true,
+                  playsInline: true,
+                  style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  },
+                }),
+                isDetectionActive && !aiStreamError ? React.createElement('img', {
                   key: `ai_stream_${camera.id}_${streamSessionId}`,
                   src: `http://localhost:8002/api/v1/stream/${camera.id}?video_path=${encodeURIComponent(selectedVideoPath)}&t=${streamSessionId}`,
                   alt: '',
                   style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover',
-                    borderRadius: 10,
+                    zIndex: 2,
                     display: 'block',
                   },
                   onError: (e: any) => {
@@ -316,25 +364,12 @@ export const CameraPopup: React.FC<Props> = ({
                     if (target && !target.dataset.retried) {
                       target.dataset.retried = 'true';
                       target.src = `http://localhost:8000/api/v1/cameras/${camera.id}/stream?video_path=${encodeURIComponent(selectedVideoPath)}&t=${streamSessionId}`;
+                    } else {
+                      setAiStreamError(true);
                     }
                   }
-                })
-              ) : (
-                React.createElement('video', {
-                  key: `${camera.id}_${selectedVideoPath}`,
-                  src: selectedVideoPath,
-                  autoPlay: true,
-                  loop: true,
-                  muted: true,
-                  playsInline: true,
-                  style: {
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: 10,
-                  },
-                })
-              )
+                }) : null
+              ])
             ) : (
               <View style={styles.feedCenterContent}>
                 <Ionicons name="videocam" size={36} color={colors.accent} />
