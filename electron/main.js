@@ -41,14 +41,32 @@ function checkAiDaemonHealth(port = 8002) {
 }
 
 /**
+ * Kill any leftover process on port 8002 to ensure AI stdout/stderr is bound to THIS terminal
+ */
+function killOrphanProcessOnPort(port = 8002) {
+  try {
+    if (process.platform === 'win32') {
+      const out = require('child_process').execSync(`netstat -ano | findstr :${port}`).toString();
+      const lines = out.split('\n');
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && !isNaN(Number(pid))) {
+          require('child_process').execSync(`taskkill /PID ${pid} /F`);
+        }
+      }
+    } else {
+      require('child_process').execSync(`fuser -k ${port}/tcp 2>/dev/null || true`);
+    }
+  } catch {}
+}
+
+/**
  * Start the Python AI stream server as an embedded background sidecar
  */
 async function startAiDaemon() {
-  const isHealthy = await checkAiDaemonHealth(8002);
-  if (isHealthy) {
-    console.log('[ELECTRON-AI] ✅ Traffix_Ai stream daemon is already active on port 8002.');
-    return;
-  }
+  killOrphanProcessOnPort(8002);
+  await new Promise((r) => setTimeout(r, 200));
 
   const aiRootDir = path.resolve(__dirname, '../../Traffix_Ai');
   const streamServerScript = path.join(aiRootDir, 'server', 'stream_server.py');
@@ -65,18 +83,28 @@ async function startAiDaemon() {
     aiDaemonProcess = spawn(pythonPath, [streamServerScript], {
       cwd: aiRootDir,
       detached: false,
-      stdio: 'pipe',
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
 
     aiDaemonProcess.stdout.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg) console.log(`[AI-SIDECAR] ${msg}`);
+      const text = data.toString();
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (line.trim()) {
+          console.log(`[AI-ENGINE] ${line.trim()}`);
+        }
+      }
     });
 
     aiDaemonProcess.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg && !msg.includes('INFO:')) console.warn(`[AI-SIDECAR-ERR] ${msg}`);
+      const text = data.toString();
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (line.trim() && !line.includes('INFO:')) {
+          console.log(`[AI-ENGINE] ${line.trim()}`);
+        }
+      }
     });
 
     aiDaemonProcess.on('error', (err) => {
@@ -89,7 +117,7 @@ async function startAiDaemon() {
     });
 
     // Wait for the server to be healthy
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 25; attempt++) {
       await new Promise((r) => setTimeout(r, 250));
       if (await checkAiDaemonHealth(8002)) {
         console.log('[ELECTRON-AI] 🚀 Traffix_Ai sidecar initialized and ready on port 8002!');
