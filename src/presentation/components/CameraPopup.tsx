@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, Pressable, Platform, ScrollView, Touchab
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Camera } from '../../domain/models/Camera';
-import { CameraApi } from '../../data/api/CameraApi';
+import { CameraApi, AvailableVideo } from '../../data/api/CameraApi';
 
 export type BoundingBoxData = {
   x1: number;
@@ -67,6 +67,9 @@ export const CameraPopup: React.FC<Props> = ({
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
   const [aiStreamActive, setAiStreamActive] = React.useState(false);
   const [aiStreamError, setAiStreamError] = React.useState(false);
+  const [availableVideos, setAvailableVideos] = React.useState<AvailableVideo[]>([]);
+  const [selectedVideoPath, setSelectedVideoPath] = React.useState<string>('/videos/sample_traffic.mp4');
+  const [isVideoMenuOpen, setIsVideoMenuOpen] = React.useState<boolean>(false);
 
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '';
@@ -113,11 +116,23 @@ export const CameraPopup: React.FC<Props> = ({
     if (!visible || !camera) {
       setIsDetectionActive(false);
       setAiStreamActive(false);
+      setIsVideoMenuOpen(false);
       return;
     }
+    const currentPath = camera.streamUrl || camera.stream_url || '/videos/sample_traffic.mp4';
+    setSelectedVideoPath(currentPath);
     setIsDetectionActive(false);
     setAiStreamActive(false);
     setAiStreamError(false);
+    setIsVideoMenuOpen(false);
+
+    // Fetch dynamic available video clips from public/videos/
+    CameraApi.getAvailableVideos().then((videos) => {
+      if (Array.isArray(videos) && videos.length > 0) {
+        setAvailableVideos(videos);
+      }
+    }).catch((err) => console.warn('Failed to load available videos:', err));
+
     const interval = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString());
     }, 1000);
@@ -125,6 +140,22 @@ export const CameraPopup: React.FC<Props> = ({
   }, [visible, camera?.id]);
 
   if (!camera || !visible) return null;
+
+  const handleSelectVideo = async (video: AvailableVideo) => {
+    setSelectedVideoPath(video.path);
+    setIsVideoMenuOpen(false);
+    setStreamSessionId(Date.now());
+    try {
+      await CameraApi.updateCamera(camera.id, { stream_url: video.path });
+      setDetectedNotice(`Video source changed to ${video.name || video.filename}`);
+      setTimeout(() => setDetectedNotice(null), 3000);
+      if (isDetectionActive) {
+        await CameraApi.triggerCameraDetection(camera.id, 'auto');
+      }
+    } catch (err) {
+      console.error('Failed to update video source:', err);
+    }
+  };
 
   const handleToggleDetection = async () => {
     if (!camera) return;
@@ -250,7 +281,7 @@ export const CameraPopup: React.FC<Props> = ({
               isDetectionActive ? (
                 React.createElement('img', {
                   key: `ai_stream_${camera.id}_${streamSessionId}`,
-                  src: `http://localhost:8002/api/v1/stream/${camera.id}?video_path=${encodeURIComponent(camera.streamUrl || camera.stream_url || '')}&t=${streamSessionId}`,
+                  src: `http://localhost:8002/api/v1/stream/${camera.id}?video_path=${encodeURIComponent(selectedVideoPath)}&t=${streamSessionId}`,
                   alt: '',
                   style: {
                     width: '100%',
@@ -263,14 +294,14 @@ export const CameraPopup: React.FC<Props> = ({
                     const target = e?.target as HTMLImageElement;
                     if (target && !target.dataset.retried) {
                       target.dataset.retried = 'true';
-                      target.src = `http://localhost:8000/api/v1/cameras/${camera.id}/stream?video_path=${encodeURIComponent(camera.streamUrl || camera.stream_url || '')}&t=${streamSessionId}`;
+                      target.src = `http://localhost:8000/api/v1/cameras/${camera.id}/stream?video_path=${encodeURIComponent(selectedVideoPath)}&t=${streamSessionId}`;
                     }
                   }
                 })
               ) : (
                 React.createElement('video', {
-                  key: `${camera.id}_${camera.streamUrl || camera.stream_url || ''}`,
-                  src: camera.streamUrl || camera.stream_url || (camera.id === 'CAM_002' || camera.id === 'CAM_004' ? '/videos/junction_traffic.mp4' : '/videos/sample_traffic.mp4'),
+                  key: `${camera.id}_${selectedVideoPath}`,
+                  src: selectedVideoPath,
                   autoPlay: true,
                   loop: true,
                   muted: true,
@@ -329,6 +360,73 @@ export const CameraPopup: React.FC<Props> = ({
                 <Text style={styles.feedOverlayTimeText}>{currentTime}</Text>
               </View>
             </>
+          )}
+        </View>
+
+        {/* Video Source Selector Bar */}
+        <View style={[styles.videoSelectorCard, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}>
+          <View style={styles.videoSelectorHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <Ionicons name="film-outline" size={16} color={colors.accent} />
+              <Text style={[styles.videoSelectorLabel, { color: colors.textSecondary }]}>VIDEO SOURCE:</Text>
+              <Text style={[styles.videoSelectorValue, { color: colors.text }]} numberOfLines={1}>
+                {availableVideos.find((v) => v.path === selectedVideoPath || selectedVideoPath.endsWith(v.filename))?.name || selectedVideoPath.split('/').pop()}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.changeVideoBtn, { backgroundColor: colors.accent + '20', borderColor: colors.accent }]}
+              onPress={() => setIsVideoMenuOpen(!isVideoMenuOpen)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.changeVideoBtnText, { color: colors.accent }]}>
+                {isVideoMenuOpen ? 'Close ▲' : 'Change Video ▼'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Collapsible / Expandable Video List */}
+          {isVideoMenuOpen && (
+            <View style={[styles.videoDropdownList, { borderTopColor: colors.border }]}>
+              <Text style={[styles.dropdownSubtext, { color: colors.textMuted }]}>
+                Choose video from <Text style={{ fontFamily: 'monospace', color: colors.accent }}>TraffixAI-F/public/videos/</Text>:
+              </Text>
+              {availableVideos.map((v) => {
+                const isSelected = selectedVideoPath === v.path || selectedVideoPath.endsWith(v.filename);
+                return (
+                  <TouchableOpacity
+                    key={v.id || v.filename}
+                    style={[
+                      styles.videoOptionRow,
+                      {
+                        backgroundColor: isSelected ? colors.accent + '20' : colors.surface,
+                        borderColor: isSelected ? colors.accent : colors.border,
+                      }
+                    ]}
+                    onPress={() => handleSelectVideo(v)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={isSelected ? "checkmark-circle" : "videocam-outline"}
+                      size={18}
+                      color={isSelected ? colors.accent : colors.textMuted}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.videoOptionTitle, { color: isSelected ? colors.accent : colors.text }]} numberOfLines={1}>
+                        {v.name || v.filename}
+                      </Text>
+                      <Text style={[styles.videoOptionSub, { color: colors.textMuted }]} numberOfLines={1}>
+                        {v.filename} {v.sizeFormatted ? `• ${v.sizeFormatted}` : ''}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <View style={[styles.activePill, { backgroundColor: colors.accent }]}>
+                        <Text style={styles.activePillText}>ACTIVE</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           )}
         </View>
 
@@ -924,5 +1022,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  videoSelectorCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 12,
+  },
+  videoSelectorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  videoSelectorLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  videoSelectorValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
+  },
+  changeVideoBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  changeVideoBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  videoDropdownList: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  dropdownSubtext: {
+    fontSize: 10,
+    marginBottom: 4,
+  },
+  videoOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  videoOptionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  videoOptionSub: {
+    fontSize: 9,
+    marginTop: 1,
+  },
+  activePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activePillText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

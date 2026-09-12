@@ -277,4 +277,29 @@ export const CameraApi = {
       camera_id: cameraId,
     });
   },
+
+  async getAvailableVideos(): Promise<AvailableVideo[]> {
+    const res = await apiClient.get<{ videos?: AvailableVideo[] } | AvailableVideo[]>('/api/v1/cameras/videos');
+    if (res.isLive && res.data) {
+      const list = Array.isArray(res.data) ? res.data : (res.data as any).videos;
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
+    }
+    return [
+      { id: 'gettyimages-1191315794-640_adpp.mp4', filename: 'gettyimages-1191315794-640_adpp.mp4', name: 'Kolkata Taxi (WB04B1574)', path: '/videos/gettyimages-1191315794-640_adpp.mp4', sizeFormatted: '5.3 MB' },
+      { id: 'sample_traffic.mp4', filename: 'sample_traffic.mp4', name: 'Kolkata Urban Traffic', path: '/videos/sample_traffic.mp4', sizeFormatted: '2.7 MB' },
+      { id: 'junction_traffic.mp4', filename: 'junction_traffic.mp4', name: 'High-Density Junction', path: '/videos/junction_traffic.mp4', sizeFormatted: '3.7 MB' },
+      { id: 'gettyimages-465302231-640_adpp.mp4', filename: 'gettyimages-465302231-640_adpp.mp4', name: 'Intersection Crossing', path: '/videos/gettyimages-465302231-640_adpp.mp4', sizeFormatted: '2.3 MB' },
+    ];
+  },
+};
+
+export type AvailableVideo = {
+  id: string;
+  filename: string;
+  name: string;
+  path: string;
+  sizeBytes?: number;
+  sizeFormatted?: string;
 };
