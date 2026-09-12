@@ -279,13 +279,37 @@ export const CameraApi = {
   },
 
   async getAvailableVideos(): Promise<AvailableVideo[]> {
-    const res = await apiClient.get<{ videos?: AvailableVideo[] } | AvailableVideo[]>('/api/v1/cameras/videos');
-    if (res.isLive && res.data) {
-      const list = Array.isArray(res.data) ? res.data : (res.data as any).videos;
-      if (Array.isArray(list) && list.length > 0) {
-        return list;
+    // 1. Try local Edge AI engine first (127.0.0.1:8002) for 0-latency offline discovery
+    try {
+      const aiRes = await fetch('http://127.0.0.1:8002/api/v1/videos', { signal: AbortSignal.timeout(600) });
+      if (aiRes.ok) {
+        const json = await aiRes.json();
+        const list = json?.data?.videos || json?.videos;
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map((v: any) => ({
+            id: v.id || v.filename,
+            filename: v.filename,
+            name: v.name || v.filename.replace(/\.mp4$/i, '').replace(/[-_]/g, ' '),
+            path: v.path || `/videos/${v.filename}`,
+            sizeBytes: v.sizeBytes,
+            sizeFormatted: v.sizeFormatted,
+          }));
+        }
       }
-    }
+    } catch {}
+
+    // 2. Try Backend API (localhost:8000 / Render)
+    try {
+      const res = await apiClient.get<{ videos?: AvailableVideo[] } | AvailableVideo[]>('/api/v1/cameras/videos');
+      if (res.isLive && res.data) {
+        const list = Array.isArray(res.data) ? res.data : (res.data as any).videos;
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      }
+    } catch {}
+
+    // 3. Fallback Built-in Presets
     return [
       { id: 'gettyimages-1191315794-640_adpp.mp4', filename: 'gettyimages-1191315794-640_adpp.mp4', name: 'Kolkata Taxi (WB04B1574)', path: '/videos/gettyimages-1191315794-640_adpp.mp4', sizeFormatted: '5.3 MB' },
       { id: 'sample_traffic.mp4', filename: 'sample_traffic.mp4', name: 'Kolkata Urban Traffic', path: '/videos/sample_traffic.mp4', sizeFormatted: '2.7 MB' },
