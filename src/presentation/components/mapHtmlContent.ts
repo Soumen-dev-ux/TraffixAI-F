@@ -81,41 +81,46 @@ export function getMapHtmlContent(): string {
     .vehicle-marker {
       position: relative;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      z-index: 10;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .vehicle-icon-ring {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: #0284c7;
-      border: 2.5px solid #38bdf8;
-      color: #ffffff;
+    .vehicle-marker:hover {
+      transform: scale(1.18) translateY(-6px);
+    }
+    .vehicle-3d-wrapper {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.3), 0 8px 20px rgba(0,0,0,0.6);
-      animation: pulseVehicle 2s infinite ease-in-out;
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.65));
     }
-    @keyframes pulseVehicle {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.3), 0 8px 20px rgba(0,0,0,0.6); }
-      50% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(56, 189, 248, 0.15), 0 12px 24px rgba(0,0,0,0.7); }
+    .radar-pulse {
+      animation: radarRingAnim 2.2s infinite ease-in-out;
+      transform-origin: 50px 62px;
+    }
+    @keyframes radarRingAnim {
+      0% { transform: scale(0.85); opacity: 0.9; }
+      50% { transform: scale(1.15); opacity: 0.35; }
+      100% { transform: scale(0.85); opacity: 0.9; }
     }
     .vehicle-plate-pill {
-      position: absolute;
-      bottom: -22px;
-      background: #0f172a;
+      margin-top: -6px;
+      background: rgba(15, 23, 42, 0.95);
       color: #38bdf8;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 4px;
-      border: 1px solid #38bdf8;
+      padding: 3px 9px;
+      border-radius: 6px;
+      border: 1.5px solid #38bdf8;
       white-space: nowrap;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.65), 0 0 12px rgba(56, 189, 248, 0.4);
       pointer-events: none;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
+      backdrop-filter: blur(4px);
     }
     .detection-marker {
       width: 26px;
@@ -639,6 +644,208 @@ export function getMapHtmlContent(): string {
       setupReady();
     }, 250);
 
+    function get3DVehicleSvg(type, colorName) {
+      var vType = (type || 'car').toLowerCase();
+      var cName = (colorName || 'Silver').toLowerCase();
+
+      var primaryColor = '#38bdf8';
+      var secondaryColor = '#0284c7';
+      var roofColor = '#0369a1';
+      var highlightColor = '#e0f2fe';
+
+      if (cName.includes('yellow') || vType === 'taxi') {
+        primaryColor = '#eab308';
+        secondaryColor = '#ca8a04';
+        roofColor = '#a16207';
+        highlightColor = '#fef08a';
+      } else if (cName.includes('red')) {
+        primaryColor = '#ef4444';
+        secondaryColor = '#dc2626';
+        roofColor = '#b91c1c';
+        highlightColor = '#fecaca';
+      } else if (cName.includes('white') || cName.includes('silver') || cName.includes('grey') || cName.includes('gray')) {
+        primaryColor = '#e2e8f0';
+        secondaryColor = '#94a3b8';
+        roofColor = '#64748b';
+        highlightColor = '#ffffff';
+      } else if (cName.includes('black') || cName.includes('dark')) {
+        primaryColor = '#334155';
+        secondaryColor = '#1e293b';
+        roofColor = '#0f172a';
+        highlightColor = '#64748b';
+      } else if (cName.includes('green')) {
+        primaryColor = '#22c55e';
+        secondaryColor = '#16a34a';
+        roofColor = '#15803d';
+        highlightColor = '#bbf7d0';
+      }
+
+      // 1. 3D TRUCK
+      if (vType === 'truck') {
+        return '<svg width="68" height="68" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+          '<defs>' +
+            '<filter id="v-shadow-truck" x="-30%" y="-30%" width="160%" height="160%">' +
+              '<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>' +
+              '<feOffset dx="2" dy="5"/>' +
+              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
+              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
+            '</filter>' +
+            '<linearGradient id="truck-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
+              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
+              '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
+            '</linearGradient>' +
+          '</defs>' +
+          '<ellipse cx="50" cy="62" rx="34" ry="18" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
+          '<polygon points="28,68 8,85 30,95 44,76" fill="url(#truck-beam)" />' +
+          '<polygon points="56,76 46,95 68,85 48,68" fill="url(#truck-beam)" />' +
+          '<ellipse cx="50" cy="62" rx="26" ry="12" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-truck)" />' +
+          '<g filter="url(#v-shadow-truck)">' +
+            '<polygon points="32,28 66,12 66,42 32,58" fill="' + secondaryColor + '" />' +
+            '<polygon points="32,28 66,12 80,18 46,35" fill="' + primaryColor + '" />' +
+            '<polygon points="66,12 80,18 80,48 66,42" fill="' + roofColor + '" />' +
+            '<line x1="43" y1="23" x2="43" y2="52" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
+            '<line x1="54" y1="18" x2="54" y2="47" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />' +
+            '<polygon points="18,48 36,39 46,44 28,54" fill="' + highlightColor + '" />' +
+            '<polygon points="18,48 28,54 28,70 18,63" fill="' + primaryColor + '" />' +
+            '<polygon points="28,54 46,44 46,60 28,70" fill="' + secondaryColor + '" />' +
+            '<polygon points="20,49 34,42 42,46 28,53" fill="#0f172a" opacity="0.85" />' +
+            '<polygon points="22,50 32,45 36,47 26,52" fill="#38bdf8" opacity="0.6" />' +
+            '<circle cx="20" cy="62" r="2.5" fill="#fef08a" />' +
+            '<circle cx="27" cy="67" r="2.5" fill="#fef08a" />' +
+            '<ellipse cx="22" cy="69" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+            '<ellipse cx="40" cy="63" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+            '<ellipse cx="72" cy="46" rx="4" ry="7" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+          '</g>' +
+        '</svg>';
+      }
+
+      // 2. 3D BUS
+      if (vType === 'bus') {
+        return '<svg width="68" height="68" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+          '<defs>' +
+            '<filter id="v-shadow-bus" x="-30%" y="-30%" width="160%" height="160%">' +
+              '<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>' +
+              '<feOffset dx="2" dy="5"/>' +
+              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
+              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
+            '</filter>' +
+            '<linearGradient id="bus-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
+              '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
+              '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
+            '</linearGradient>' +
+          '</defs>' +
+          '<ellipse cx="50" cy="62" rx="34" ry="18" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
+          '<polygon points="20,66 2,82 24,96 36,73" fill="url(#bus-beam)" />' +
+          '<ellipse cx="50" cy="62" rx="28" ry="12" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-bus)" />' +
+          '<g filter="url(#v-shadow-bus)">' +
+            '<polygon points="20,32 68,10 82,16 34,39" fill="' + highlightColor + '" />' +
+            '<polygon points="20,32 34,39 34,65 20,57" fill="' + primaryColor + '" />' +
+            '<polygon points="34,39 82,16 82,42 34,65" fill="' + secondaryColor + '" />' +
+            '<polygon points="40,22 60,13 65,15 45,24" fill="#64748b" />' +
+            '<polygon points="21,34 33,40 33,52 21,46" fill="#0f172a" />' +
+            '<polygon points="22,36 31,41 31,50 22,45" fill="#38bdf8" opacity="0.75" />' +
+            '<polygon points="37,40 78,21 78,32 37,51" fill="#0f172a" />' +
+            '<polygon points="39,41 76,23 76,30 39,49" fill="#0284c7" opacity="0.8" />' +
+            '<circle cx="22" cy="54" r="2.2" fill="#fef08a" />' +
+            '<circle cx="30" cy="59" r="2.2" fill="#fef08a" />' +
+            '<ellipse cx="26" cy="62" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+            '<ellipse cx="68" cy="42" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+          '</g>' +
+        '</svg>';
+      }
+
+      // 3. 3D MOTORCYCLE / BIKE
+      if (vType === 'motorcycle' || vType === 'bike' || vType === 'motorbike') {
+        return '<svg width="58" height="58" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+          '<defs>' +
+            '<filter id="v-shadow-bike" x="-30%" y="-30%" width="160%" height="160%">' +
+              '<feGaussianBlur in="SourceAlpha" stdDeviation="2"/>' +
+              '<feOffset dx="1" dy="4"/>' +
+              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
+              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
+            '</filter>' +
+          '</defs>' +
+          '<ellipse cx="50" cy="64" rx="26" ry="14" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8" class="radar-pulse" />' +
+          '<ellipse cx="50" cy="64" rx="18" ry="8" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-bike)" />' +
+          '<g filter="url(#v-shadow-bike)">' +
+            '<ellipse cx="64" cy="50" rx="4" ry="10" fill="#0f172a" stroke="#475569" stroke-width="1.5" />' +
+            '<ellipse cx="32" cy="65" rx="4" ry="10" fill="#0f172a" stroke="#475569" stroke-width="1.5" />' +
+            '<polygon points="34,60 52,42 62,48 44,66" fill="' + secondaryColor + '" />' +
+            '<polygon points="38,48 48,38 56,42 46,52" fill="' + primaryColor + '" />' +
+            '<circle cx="48" cy="28" r="7" fill="#0f172a" stroke="' + primaryColor + '" stroke-width="1" />' +
+            '<path d="M42,35 C42,32 54,32 54,35 L58,46 L40,46 Z" fill="#1e293b" />' +
+            '<line x1="30" y1="48" x2="38" y2="44" stroke="#e2e8f0" stroke-width="2" />' +
+            '<circle cx="28" cy="58" r="3" fill="#fef08a" />' +
+          '</g>' +
+        '</svg>';
+      }
+
+      // 4. 3D VAN
+      if (vType === 'van') {
+        return '<svg width="64" height="64" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+          '<defs>' +
+            '<filter id="v-shadow-van" x="-30%" y="-30%" width="160%" height="160%">' +
+              '<feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>' +
+              '<feOffset dx="2" dy="4"/>' +
+              '<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>' +
+              '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
+            '</filter>' +
+          '</defs>' +
+          '<ellipse cx="50" cy="62" rx="30" ry="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8" class="radar-pulse" />' +
+          '<ellipse cx="50" cy="62" rx="24" ry="11" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-van)" />' +
+          '<g filter="url(#v-shadow-van)">' +
+            '<polygon points="24,36 64,16 76,22 36,44" fill="' + highlightColor + '" />' +
+            '<polygon points="24,36 36,44 36,66 24,58" fill="' + primaryColor + '" />' +
+            '<polygon points="36,44 76,22 76,44 36,66" fill="' + secondaryColor + '" />' +
+            '<polygon points="20,48 24,36 36,44 32,56" fill="' + primaryColor + '" />' +
+            '<polygon points="22,46 25,38 34,44 31,52" fill="#0f172a" />' +
+            '<polygon points="23,46 25,40 32,45 30,50" fill="#38bdf8" opacity="0.75" />' +
+            '<line x1="52" y1="35" x2="52" y2="57" stroke="rgba(0,0,0,0.3)" stroke-width="1" />' +
+            '<circle cx="21" cy="54" r="2.2" fill="#fef08a" />' +
+            '<circle cx="28" cy="59" r="2.2" fill="#fef08a" />' +
+            '<ellipse cx="28" cy="63" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+            '<ellipse cx="62" cy="46" rx="3.5" ry="6.5" fill="#090d16" stroke="#475569" stroke-width="1" />' +
+          '</g>' +
+        '</svg>';
+      }
+
+      // 5. 3D CAR / SEDAN / TAXI (Default)
+      return '<svg width="64" height="64" viewBox="0 0 100 100" class="vehicle-3d-svg">' +
+        '<defs>' +
+          '<filter id="v-shadow-car" x="-30%" y="-30%" width="160%" height="160%">' +
+            '<feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>' +
+            '<feOffset dx="2" dy="5"/>' +
+            '<feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer>' +
+            '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>' +
+          '</filter>' +
+          '<linearGradient id="headlight-beam" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>' +
+            '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>' +
+          '</linearGradient>' +
+        '</defs>' +
+        '<ellipse cx="50" cy="62" rx="30" ry="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.85" class="radar-pulse" />' +
+        '<polygon points="22,66 2,82 22,96 34,74" fill="url(#headlight-beam)" />' +
+        '<ellipse cx="50" cy="62" rx="24" ry="11" fill="rgba(0,0,0,0.55)" filter="url(#v-shadow-car)" />' +
+        '<g filter="url(#v-shadow-car)">' +
+          '<polygon points="18,52 38,42 78,22 84,26 44,66 24,58" fill="' + secondaryColor + '" />' +
+          '<polygon points="18,52 24,58 24,66 18,60" fill="' + roofColor + '" />' +
+          '<polygon points="24,58 44,66 44,74 24,66" fill="' + secondaryColor + '" />' +
+          '<polygon points="44,66 84,26 84,34 44,74" fill="' + roofColor + '" />' +
+          '<polygon points="34,36 50,28 66,20 50,48" fill="' + highlightColor + '" />' +
+          '<polygon points="28,46 36,37 48,43 40,52" fill="#0f172a" />' +
+          '<polygon points="30,46 36,39 46,44 40,50" fill="#38bdf8" opacity="0.85" />' +
+          '<polygon points="42,50 49,43 64,22 57,29" fill="#0f172a" />' +
+          '<polygon points="44,49 49,44 62,24 57,29" fill="#0284c7" opacity="0.8" />' +
+          '<polygon points="18,52 30,46 42,52 30,58" fill="' + primaryColor + '" />' +
+          '<circle cx="22" cy="56" r="2.5" fill="#fef08a" />' +
+          '<circle cx="32" cy="62" r="2.5" fill="#fef08a" />' +
+          '<polygon points="23,59 31,64 30,66 22,61" fill="#090d16" />' +
+          '<ellipse cx="26" cy="65" rx="3.5" ry="7" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+          '<ellipse cx="64" cy="46" rx="3.5" ry="7" fill="#090d16" stroke="#475569" stroke-width="1.2" />' +
+        '</g>' +
+      '</svg>';
+    }
+
     function updateMap(data) {
       if (!data) return;
       if (!isMapReady) {
@@ -826,13 +1033,17 @@ export function getMapHtmlContent(): string {
       if (vehicle) {
         var vel = document.createElement('div');
         vel.className = 'vehicle-marker';
-        vel.innerHTML = '<div class="vehicle-icon-ring">' +
-          '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.77l.11.34V17z"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/></svg>' +
-          '</div>' +
-          '<span class="vehicle-plate-pill">' + (vehicle.plateNumber || '') + '</span>';
+        var vType = vehicle.vehicleType || vehicle.type || 'car';
+        var vColor = vehicle.color || 'Silver';
+        var vSvg = get3DVehicleSvg(vType, vColor);
 
-        var vpopup = new maplibregl.Popup({ offset: 24 })
-          .setHTML('<strong style="color:#38bdf8;">' + vehicle.plateNumber + '</strong><br/><span style="color:#f1f5f9;">' + (vehicle.color || '') + ' ' + (vehicle.vehicleType || '') + '</span><br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Moving') + '</span>');
+        vel.innerHTML = '<div class="vehicle-3d-wrapper">' +
+          vSvg +
+          '</div>' +
+          '<span class="vehicle-plate-pill">' + (vehicle.plateNumber || 'TARGET') + '</span>';
+
+        var vpopup = new maplibregl.Popup({ offset: 28 })
+          .setHTML('<strong style="color:#38bdf8; font-size:13px;">' + (vehicle.plateNumber || 'TARGET') + '</strong><br/><span style="color:#f1f5f9; font-weight:600;">' + (vehicle.color || '') + ' ' + (vType.toUpperCase()) + '</span><br/><span style="color:#94a3b8;">Speed: ' + (vehicle.speed ? vehicle.speed + ' km/h' : 'Tracking') + '</span>');
 
         vehicleMarker = new maplibregl.Marker({ element: vel, anchor: 'center' })
           .setLngLat([vehicle.longitude, vehicle.latitude])
