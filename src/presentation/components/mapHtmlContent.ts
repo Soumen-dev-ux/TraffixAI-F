@@ -22,34 +22,63 @@ export function getMapHtmlContent(): string {
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
-    .camera-marker {
-      background: #1e293b;
-      border: 2px solid #22c55e;
-      border-radius: 50%;
-      width: 36px;
-      height: 36px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.55);
-      color: #38bdf8;
+    :root {
+      --camera-zoom-scale: 1.0;
+      --camera-label-display: block;
+      --camera-badge-display: flex;
+    }
+    .camera-pin-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
+      transform: scale(var(--camera-zoom-scale, 1.0));
+      transform-origin: bottom center;
+      transition: transform 0.12s ease-out;
+      pointer-events: auto;
+      user-select: none;
+    }
+    .camera-pin-wrapper:hover {
+      transform: scale(calc(var(--camera-zoom-scale, 1.0) * 1.25)) translateY(-4px);
+      z-index: 100;
+    }
+    .camera-pin-body {
+      background: #0f172a;
+      border: 2.5px solid #22c55e;
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.65), 0 0 12px rgba(34, 197, 94, 0.45);
+      color: #38bdf8;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .camera-marker.offline {
+    .camera-pin-wrapper.offline .camera-pin-body {
       border-color: #ef4444;
       color: #94a3b8;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
     }
-    .camera-marker:hover, .camera-marker:active {
-      transform: scale(1.22) translateY(-3px);
-      box-shadow: 0 12px 24px rgba(34, 197, 94, 0.45);
-      z-index: 50;
+    .camera-pin-needle {
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid #22c55e;
+      margin-top: -1px;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    }
+    .camera-pin-wrapper.offline .camera-pin-needle {
+      border-top-color: #ef4444;
     }
     .camera-count-badge {
+      display: var(--camera-badge-display, flex);
       position: absolute;
-      top: -6px;
-      right: -6px;
+      top: -7px;
+      right: -7px;
       background: #0f172a;
       border: 1.5px solid #22c55e;
       color: #ffffff;
@@ -59,26 +88,29 @@ export function getMapHtmlContent(): string {
       border-radius: 10px;
       min-width: 16px;
       text-align: center;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
     }
-    .camera-marker.offline .camera-count-badge {
+    .camera-pin-wrapper.offline .camera-count-badge {
       border-color: #ef4444;
     }
     .camera-label {
-      position: absolute;
-      bottom: -20px;
-      left: 50%;
-      transform: translateX(-50%);
+      display: var(--camera-label-display, block);
+      margin-top: 4px;
       background: rgba(15, 23, 42, 0.95);
       color: #f1f5f9;
       font-size: 10px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 4px;
+      font-weight: 700;
+      padding: 2.5px 7px;
+      border-radius: 5px;
       white-space: nowrap;
       pointer-events: none;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.65);
       border: 1px solid rgba(255, 255, 255, 0.15);
       letter-spacing: 0.3px;
+      text-align: center;
+      backdrop-filter: blur(6px);
     }
     .vehicle-marker {
       position: relative;
@@ -13229,6 +13261,29 @@ export function getMapHtmlContent(): string {
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
 
+    function syncZoomScale() {
+      if (!map) return;
+      var z = map.getZoom();
+      var scale = 1.0;
+      if (z <= 10.5) {
+        scale = 0.52;
+      } else if (z <= 12) {
+        scale = 0.72;
+      } else if (z <= 13.5) {
+        scale = 0.88;
+      } else if (z <= 15) {
+        scale = 1.0;
+      } else {
+        scale = 1.18;
+      }
+      document.documentElement.style.setProperty('--camera-zoom-scale', scale.toFixed(2));
+      document.documentElement.style.setProperty('--camera-label-display', z < 12.2 ? 'none' : 'block');
+      document.documentElement.style.setProperty('--camera-badge-display', z < 11.2 ? 'none' : 'flex');
+    }
+    map.on('zoom', syncZoomScale);
+    map.on('zoomend', syncZoomScale);
+    syncZoomScale();
+
     var isMapReady = false;
     var pendingData = null;
     var cameraMarkers = [];
@@ -13732,16 +13787,20 @@ export function getMapHtmlContent(): string {
         });
       }
 
-      // 2. Update Cameras
+      // 2. Update Cameras (Google Maps style ground-pinned needle markers with dynamic scaling)
       cameraMarkers.forEach(function(m) { m.remove(); });
       cameraMarkers = [];
       cameras.forEach(function(camera) {
         var el = document.createElement('div');
         var isOnline = camera.status === 'online';
-        el.className = 'camera-marker ' + (isOnline ? 'online' : 'offline');
+        el.className = 'camera-pin-wrapper ' + (isOnline ? 'online' : 'offline');
         el.title = camera.name || camera.id;
-        el.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>' +
-          (camera.vehicleCount ? '<span class="camera-count-badge">' + camera.vehicleCount + '</span>' : '') +
+        el.innerHTML =
+          '<div class="camera-pin-body">' +
+            '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>' +
+            (camera.vehicleCount ? '<span class="camera-count-badge">' + camera.vehicleCount + '</span>' : '') +
+          '</div>' +
+          '<div class="camera-pin-needle"></div>' +
           '<span class="camera-label">' + (camera.name || camera.id) + '</span>';
 
         el.addEventListener('click', function(ev) {
@@ -13749,10 +13808,15 @@ export function getMapHtmlContent(): string {
           postToHost({ type: 'CAMERA_CLICK', cameraId: camera.id });
         });
 
-        var popup = new maplibregl.Popup({ offset: 20 })
+        var popup = new maplibregl.Popup({ offset: [0, -38] })
           .setHTML('<strong style="font-size:13px; color:#38bdf8;">' + (camera.name || camera.id) + '</strong><br/><span style="color:' + (isOnline ? '#22c55e' : '#ef4444') + ';">Status: ' + (camera.status || 'Active') + '</span><br/><span style="color:#94a3b8;">Traffic: ' + (camera.trafficLevel || 'Normal') + '</span>');
 
-        var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        var marker = new maplibregl.Marker({
+          element: el,
+          anchor: 'bottom',
+          pitchAlignment: 'map',
+          rotationAlignment: 'viewport'
+        })
           .setLngLat([camera.longitude, camera.latitude])
           .setPopup(popup)
           .addTo(map);
@@ -13798,7 +13862,12 @@ export function getMapHtmlContent(): string {
         var popup = new maplibregl.Popup({ offset: 18 })
           .setHTML('<strong>Waypoint #' + (index + 1) + '</strong><br/>' + (detection.cameraName || '') + '<br/><span style="color:#94a3b8;">' + (detection.detectedAt || '') + '</span>');
 
-        var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        var marker = new maplibregl.Marker({
+          element: el,
+          anchor: 'center',
+          pitchAlignment: 'map',
+          rotationAlignment: 'viewport'
+        })
           .setLngLat([detection.longitude, detection.latitude])
           .setPopup(popup)
           .addTo(map);
@@ -13901,7 +13970,9 @@ export function getMapHtmlContent(): string {
 
         vehicleMarker = new maplibregl.Marker({
           element: plateEl,
-          anchor: 'bottom'
+          anchor: 'bottom',
+          pitchAlignment: 'map',
+          rotationAlignment: 'viewport'
         })
           .setLngLat([Number(vehicle.longitude), Number(vehicle.latitude)])
           .setPopup(vpopup)
