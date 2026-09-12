@@ -63,6 +63,22 @@ export default function DashboardScreen() {
   const [showAddCamera, setShowAddCamera] = useState(false);
   const [liveDetections, setLiveDetections] = useState<DetectedVehicleItem[]>([]);
   const [reidAlert, setReidAlert] = useState<{ plate: string; fromCam: string; toCam: string; count: number } | null>(null);
+  const [activeDetectingCameras, setActiveDetectingCameras] = useState<string[]>([]);
+
+  // Synchronize live AI detection states across cameras
+  useEffect(() => {
+    const syncStatus = async () => {
+      try {
+        const res = await CameraApi.getDetectionStatus();
+        if (Array.isArray(res?.active_cameras)) {
+          setActiveDetectingCameras(res.active_cameras);
+        }
+      } catch {}
+    };
+    syncStatus();
+    const interval = setInterval(syncStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Realtime subscription (WebSocket with auto-fallback)
   useEffect(() => {
@@ -580,10 +596,20 @@ export default function DashboardScreen() {
   };
 
   const handleTriggerCameraDetection = async (cameraId: string) => {
+    setActiveDetectingCameras((prev) => Array.from(new Set([...prev, cameraId])));
     try {
       await CameraApi.triggerCameraDetection(cameraId, 'auto');
     } catch (err) {
       console.error('Trigger camera detection failed:', err);
+    }
+  };
+
+  const handleStopCameraDetection = async (cameraId: string) => {
+    setActiveDetectingCameras((prev) => prev.filter((id) => id !== cameraId));
+    try {
+      await CameraApi.stopCameraDetection(cameraId);
+    } catch (err) {
+      console.error('Stop camera detection failed:', err);
     }
   };
 
@@ -716,7 +742,9 @@ export default function DashboardScreen() {
           onResetCameras={handleResetCameras}
           onSimulateDetection={handleSimulateVehicleDetection}
           onTriggerCameraDetection={handleTriggerCameraDetection}
+          onStopCameraDetection={handleStopCameraDetection}
           onEditCamera={(cam) => setEditingCamera(cam)}
+          activeDetectingCameras={activeDetectingCameras}
         />
       )}
 
@@ -794,9 +822,11 @@ export default function DashboardScreen() {
           visible={!!selectedCamera}
           onClose={() => setSelectedCamera(null)}
           onTriggerCameraDetection={handleTriggerCameraDetection}
+          onStopCameraDetection={handleStopCameraDetection}
           onEditCamera={(cam) => setEditingCamera(cam)}
           sessionDetections={liveDetections}
           onSelectVehicle={handleSelectVehicleFromCamera}
+          activeDetectingCameras={activeDetectingCameras}
         />
       </View>
 

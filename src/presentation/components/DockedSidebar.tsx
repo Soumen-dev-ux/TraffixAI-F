@@ -48,7 +48,9 @@ type Props = {
   onResetCameras?: (mode: 'clear' | 'reset') => void;
   onSimulateDetection?: (cameraId: string, plateNumber?: string) => void;
   onTriggerCameraDetection?: (cameraId: string) => void;
+  onStopCameraDetection?: (cameraId: string) => void;
   onEditCamera?: (camera: Camera) => void;
+  activeDetectingCameras?: string[];
 };
 
 const formatDisplayTime = (timeVal?: string | null) => {
@@ -93,7 +95,9 @@ export const DockedSidebar: React.FC<Props> = ({
   onResetCameras,
   onSimulateDetection,
   onTriggerCameraDetection,
+  onStopCameraDetection,
   onEditCamera,
+  activeDetectingCameras = [],
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [filter, setFilter] = useState<FilterType>('all');
@@ -514,16 +518,37 @@ export const DockedSidebar: React.FC<Props> = ({
 
                       {onSimulateDetection && (
                         <TouchableOpacity
-                          style={[styles.quickDetectBtn, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}
+                          style={[
+                            styles.quickDetectBtn,
+                            activeDetectingCameras.includes(camera.id)
+                              ? { backgroundColor: '#ef444422', borderColor: '#ef4444' }
+                              : { backgroundColor: colors.accent + '22', borderColor: colors.accent }
+                          ]}
                           onPress={(e) => {
                             e.stopPropagation();
-                            onTriggerCameraDetection?.(camera.id);
-                            onSimulateDetection(camera.id, vehicle?.plateNumber);
+                            if (activeDetectingCameras.includes(camera.id)) {
+                              onStopCameraDetection?.(camera.id);
+                            } else {
+                              onTriggerCameraDetection?.(camera.id);
+                              onSimulateDetection(camera.id, vehicle?.plateNumber);
+                            }
                           }}
                           hitSlop={4}
                         >
-                          <Ionicons name="play" size={10} color={colors.accent} style={{ marginRight: 3 }} />
-                          <Text style={[styles.quickDetectText, { color: colors.accent }]}>Detect</Text>
+                          <Ionicons
+                            name={activeDetectingCameras.includes(camera.id) ? "stop" : "play"}
+                            size={10}
+                            color={activeDetectingCameras.includes(camera.id) ? "#ef4444" : colors.accent}
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text
+                            style={[
+                              styles.quickDetectText,
+                              { color: activeDetectingCameras.includes(camera.id) ? "#ef4444" : colors.accent }
+                            ]}
+                          >
+                            {activeDetectingCameras.includes(camera.id) ? "Stop" : "Detect"}
+                          </Text>
                         </TouchableOpacity>
                       )}
 

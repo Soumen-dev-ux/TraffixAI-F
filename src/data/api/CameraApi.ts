@@ -278,6 +278,29 @@ export const CameraApi = {
     });
   },
 
+  async getDetectionStatus(): Promise<{ active_cameras: string[] }> {
+    // 1. Try local Edge AI daemon first (port 8002)
+    try {
+      const res = await fetch('http://127.0.0.1:8002/status', { signal: AbortSignal.timeout(500) });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.active_cameras)) {
+          return { active_cameras: json.active_cameras };
+        }
+      }
+    } catch {}
+
+    // 2. Try backend simulation status (port 8000)
+    try {
+      const res = await apiClient.get<any>('/api/v1/simulation/status');
+      if (res.isLive && res.data?.active_cameras) {
+        return { active_cameras: res.data.active_cameras };
+      }
+    } catch {}
+
+    return { active_cameras: [] };
+  },
+
   async getAvailableVideos(): Promise<AvailableVideo[]> {
     // 1. Try local Edge AI engine first (127.0.0.1:8002) for 0-latency offline discovery
     try {

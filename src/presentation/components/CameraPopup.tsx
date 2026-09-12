@@ -33,9 +33,11 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onTriggerCameraDetection?: (cameraId: string) => Promise<void> | void;
+  onStopCameraDetection?: (cameraId: string) => Promise<void> | void;
   onEditCamera?: (camera: Camera) => void;
   sessionDetections?: DetectedVehicleItem[];
   onSelectVehicle?: (plateNumber: string, vehicleType?: string) => void;
+  activeDetectingCameras?: string[];
 };
 
 const FILTER_CATEGORIES = [
@@ -54,9 +56,11 @@ export const CameraPopup: React.FC<Props> = ({
   visible,
   onClose,
   onTriggerCameraDetection,
+  onStopCameraDetection,
   onEditCamera,
   sessionDetections = [],
   onSelectVehicle,
+  activeDetectingCameras = [],
 }) => {
   const { colors } = useTheme();
   const [currentTime, setCurrentTime] = React.useState(() => new Date().toLocaleTimeString());
@@ -114,19 +118,28 @@ export const CameraPopup: React.FC<Props> = ({
 
   React.useEffect(() => {
     if (!visible || !camera) {
-      setIsDetectionActive(false);
-      setAiStreamActive(false);
       setIsVideoMenuOpen(false);
       return;
     }
     const currentPath = camera.streamUrl || camera.stream_url || '/videos/sample_traffic.mp4';
     setSelectedVideoPath(currentPath);
-    setIsDetectionActive(false);
-    setAiStreamActive(false);
-    setAiStreamError(false);
     setIsVideoMenuOpen(false);
 
-    // Fetch dynamic available video clips from public/videos/
+    // 1. Sync from global activeDetectingCameras prop
+    const isCurrentlyRunning = activeDetectingCameras.includes(camera.id);
+    setIsDetectionActive(isCurrentlyRunning);
+    setAiStreamActive(isCurrentlyRunning);
+    setAiStreamError(false);
+
+    // 2. Also poll live daemon/backend detection status
+    CameraApi.getDetectionStatus().then((res) => {
+      if (Array.isArray(res.active_cameras) && res.active_cameras.includes(camera.id)) {
+        setIsDetectionActive(true);
+        setAiStreamActive(true);
+      }
+    }).catch(() => {});
+
+    // 3. Fetch dynamic available video clips from public/videos/
     CameraApi.getAvailableVideos().then((videos) => {
       if (Array.isArray(videos) && videos.length > 0) {
         setAvailableVideos(videos);
@@ -137,7 +150,7 @@ export const CameraPopup: React.FC<Props> = ({
       setCurrentTime(new Date().toLocaleTimeString());
     }, 1000);
     return () => clearInterval(interval);
-  }, [visible, camera?.id]);
+  }, [visible, camera?.id, activeDetectingCameras]);
 
   if (!camera || !visible) return null;
 
@@ -150,7 +163,11 @@ export const CameraPopup: React.FC<Props> = ({
       setDetectedNotice(`Video source changed to ${video.name || video.filename}`);
       setTimeout(() => setDetectedNotice(null), 3000);
       if (isDetectionActive) {
-        await CameraApi.triggerCameraDetection(camera.id, 'auto');
+        if (onTriggerCameraDetection) {
+          await onTriggerCameraDetection(camera.id);
+        } else {
+          await CameraApi.triggerCameraDetection(camera.id, 'auto');
+        }
       }
     } catch (err) {
       console.error('Failed to update video source:', err);
@@ -163,7 +180,11 @@ export const CameraPopup: React.FC<Props> = ({
     try {
       if (isDetectionActive) {
         // Stop Detection
-        await CameraApi.stopCameraDetection(camera.id);
+        if (onStopCameraDetection) {
+          await onStopCameraDetection(camera.id);
+        } else {
+          await CameraApi.stopCameraDetection(camera.id);
+        }
         setIsDetectionActive(false);
         setAiStreamActive(false);
         setStreamSessionId(Date.now());
