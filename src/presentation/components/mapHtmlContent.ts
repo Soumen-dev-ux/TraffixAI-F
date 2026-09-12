@@ -569,6 +569,9 @@ export function getMapHtmlContent(): string {
     var trajectoryMarkers = [];
     var vehicleMarker = null;
     var is3DCurrent = true;
+    var hasInitialFitted = false;
+    var lastFocusLocationKey = null;
+    var lastVehicleKey = null;
 
     function initLayers() {
       return true;
@@ -651,15 +654,21 @@ export function getMapHtmlContent(): string {
       var is3D = data.is3DView !== undefined ? data.is3DView : true;
       var focusLocation = data.focusLocation;
 
-      // Smooth flyTo location when user searches a location or camera
+      // Smooth flyTo location ONLY when focusLocation changes (e.g. user selected/searched a camera)
       if (focusLocation && !isNaN(focusLocation.latitude) && !isNaN(focusLocation.longitude)) {
-        map.flyTo({
-          center: [Number(focusLocation.longitude), Number(focusLocation.latitude)],
-          zoom: 15.5,
-          pitch: is3DCurrent ? 50 : 0,
-          bearing: is3DCurrent ? -18 : 0,
-          duration: 1200
-        });
+        var focusKey = Number(focusLocation.latitude).toFixed(4) + ',' + Number(focusLocation.longitude).toFixed(4);
+        if (focusKey !== lastFocusLocationKey) {
+          lastFocusLocationKey = focusKey;
+          map.flyTo({
+            center: [Number(focusLocation.longitude), Number(focusLocation.latitude)],
+            zoom: 15.5,
+            pitch: is3DCurrent ? 50 : 0,
+            bearing: is3DCurrent ? -18 : 0,
+            duration: 1200
+          });
+        }
+      } else {
+        lastFocusLocationKey = null;
       }
 
       // Smooth camera perspective pitch transition & building visibility toggle
@@ -830,7 +839,9 @@ export function getMapHtmlContent(): string {
           .setPopup(vpopup)
           .addTo(map);
 
-        if (!trajectory || !trajectory.detections || trajectory.detections.length <= 1) {
+        var vKey = (vehicle.id || vehicle.plateNumber || '') + '@' + Number(vehicle.latitude).toFixed(4) + ',' + Number(vehicle.longitude).toFixed(4);
+        if (vKey !== lastVehicleKey && (!trajectory || !trajectory.detections || trajectory.detections.length <= 1)) {
+          lastVehicleKey = vKey;
           map.flyTo({
             center: [vehicle.longitude, vehicle.latitude],
             zoom: 15.5,
@@ -839,11 +850,14 @@ export function getMapHtmlContent(): string {
             duration: 1500
           });
         }
+      } else {
+        lastVehicleKey = null;
       }
 
-      // 5. Auto-fit cameras on initial view
-      if (!vehicle && (!trajectory || !trajectory.detections || trajectory.detections.length === 0)) {
+      // 5. Auto-fit cameras ONLY ONCE on initial map load (never interrupts user while navigating)
+      if (!hasInitialFitted && !vehicle && (!trajectory || !trajectory.detections || trajectory.detections.length === 0)) {
         if (cameras.length > 1) {
+          hasInitialFitted = true;
           var camBounds = new maplibregl.LngLatBounds();
           cameras.forEach(function(c) { camBounds.extend([c.longitude, c.latitude]); });
           map.fitBounds(camBounds, { padding: 80, pitch: is3DCurrent ? 46 : 0, bearing: is3DCurrent ? -18 : 0, duration: 800 });
